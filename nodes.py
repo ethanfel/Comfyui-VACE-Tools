@@ -36,7 +36,7 @@ class VACEMaskGenerator:
     OUTPUT_TOOLTIPS = (
         "Mask sequence — black (0) = keep original, white (1) = generate. Per-frame for most modes; per-pixel for Video Inpaint.",
         "Visual reference for VACE — source pixels where mask is black, grey (#7f7f7f) fill where mask is white.",
-        "Segment 1: source/context frames. End/Pre/Bidirectional/Frame Interpolation/Video Inpaint: full clip. Middle: part A. Edge: start edge. Join: part 1. Replace/Inpaint: frames before replaced region.",
+        "Segment 1: source/context frames. End/Pre/Bidirectional/Frame Interpolation/Video Inpaint/Keyframe: full clip. Middle: part A. Edge: start edge. Join: part 1. Replace/Inpaint: frames before replaced region.",
         "Segment 2: secondary context. Middle: part B. Edge: middle remainder. Join: part 2. Replace/Inpaint: original replaced frames. Others: placeholder.",
         "Segment 3: Edge: end edge. Join: part 3. Replace/Inpaint: frames after replaced region. Others: placeholder.",
         "Segment 4: Join: part 4. Others: placeholder.",
@@ -54,15 +54,17 @@ Modes:
   Frame Interpolation — insert new frames between each source pair
   Replace/Inpaint     — regenerate a range of frames in-place
   Video Inpaint       — regenerate masked spatial regions (requires inpaint_mask)
+  Keyframe            — place keyframe images at positions, generate between them
 
 Mask colors: Black = keep original, White = generate new.
 Control frames: original pixels where kept, grey (#7f7f7f) where generating.
 
 Parameter usage by mode:
-  target_frames : End, Pre, Middle, Edge, Join, Bidirectional
-  split_index   : End, Pre, Middle, Bidirectional, Frame Interpolation, Replace/Inpaint
-  edge_frames   : Edge, Join, Replace/Inpaint
-  inpaint_mask  : Video Inpaint only"""
+  target_frames      : End, Pre, Middle, Edge, Join, Bidirectional, Keyframe
+  split_index        : End, Pre, Middle, Bidirectional, Frame Interpolation, Replace/Inpaint
+  edge_frames        : Edge, Join, Replace/Inpaint
+  inpaint_mask       : Video Inpaint only
+  keyframe_positions : Keyframe only (optional)"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -80,10 +82,11 @@ Parameter usage by mode:
                         "Frame Interpolation",
                         "Replace/Inpaint",
                         "Video Inpaint",
+                        "Keyframe",
                     ],
                     {
                         "default": "End Extend",
-                        "description": "End: generate after clip. Pre: generate before clip. Middle: generate at split point. Edge: generate between reversed edges (looping). Join: generate to heal two halves. Bidirectional: generate before AND after clip. Frame Interpolation: insert generated frames between each source pair. Replace/Inpaint: regenerate a range of frames in-place. Video Inpaint: regenerate masked spatial regions across all frames (requires inpaint_mask).",
+                        "description": "End: generate after clip. Pre: generate before clip. Middle: generate at split point. Edge: generate between reversed edges (looping). Join: generate to heal two halves. Bidirectional: generate before AND after clip. Frame Interpolation: insert generated frames between each source pair. Replace/Inpaint: regenerate a range of frames in-place. Video Inpaint: regenerate masked spatial regions across all frames (requires inpaint_mask). Keyframe: place keyframe images at positions within target_frames, generate between them (optional keyframe_positions for manual placement).",
                     },
                 ),
                 "target_frames": (
@@ -92,7 +95,7 @@ Parameter usage by mode:
                         "default": 81,
                         "min": 1,
                         "max": 10000,
-                        "description": "Total output frame count for mask and control_frames. Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint.",
+                        "description": "Total output frame count for mask and control_frames. Used by Keyframe to set output length. Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint.",
                     },
                 ),
                 "split_index": (
@@ -101,7 +104,7 @@ Parameter usage by mode:
                         "default": 0,
                         "min": -10000,
                         "max": 10000,
-                        "description": "Where to split the source. End: trim from end (e.g. -16). Pre: reference frames from start (e.g. 24). Middle: split frame index. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by Video Inpaint.",
+                        "description": "Where to split the source. End: trim from end (e.g. -16). Pre: reference frames from start (e.g. 24). Middle: split frame index. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by Video Inpaint and Keyframe.",
                     },
                 ),
                 "edge_frames": (
@@ -110,7 +113,7 @@ Parameter usage by mode:
                         "default": 8,
                         "min": 1,
                         "max": 10000,
-                        "description": "Number of edge frames to use for Edge and Join modes. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint. Replace/Inpaint: number of frames to replace.",
+                        "description": "Number of edge frames to use for Edge and Join modes. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint/Keyframe. Replace/Inpaint: number of frames to replace.",
                     },
                 ),
             },
@@ -121,10 +124,19 @@ Parameter usage by mode:
                         "description": "Spatial inpaint mask for Video Inpaint mode. White (1.0) = regenerate, Black (0.0) = keep. Single frame broadcasts to all source frames.",
                     },
                 ),
+                "keyframe_positions": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "description": "Comma-separated frame indices for Keyframe mode (e.g. '0,20,50,80'). "
+                                       "One position per source_clip frame, sorted ascending, within [0, target_frames-1]. "
+                                       "Leave empty or disconnected for even auto-spread.",
+                    },
+                ),
             },
         }
 
-    def generate(self, source_clip, mode, target_frames, split_index, edge_frames, inpaint_mask=None):
+    def generate(self, source_clip, mode, target_frames, split_index, edge_frames, inpaint_mask=None, keyframe_positions=None):
         B, H, W, C = source_clip.shape
         dev = source_clip.device
         BLACK = 0.0
@@ -251,6 +263,53 @@ Parameter usage by mode:
             grey = torch.full_like(source_clip, GREY)
             control_frames = source_clip * (1.0 - m3) + grey * m3
             frames_to_generate = B
+            return (mask, control_frames, source_clip, ph(), ph(), ph(), frames_to_generate)
+
+        elif mode == "Keyframe":
+            if B > target_frames:
+                raise ValueError(
+                    f"Keyframe: source_clip has {B} frames but target_frames is only {target_frames}. "
+                    "Need at least as many target frames as keyframes."
+                )
+            if keyframe_positions and keyframe_positions.strip():
+                positions = [int(x.strip()) for x in keyframe_positions.split(",")]
+                if len(positions) != B:
+                    raise ValueError(
+                        f"Keyframe: expected {B} positions (one per source frame), got {len(positions)}."
+                    )
+                if positions != sorted(positions):
+                    raise ValueError("Keyframe: positions must be sorted in ascending order.")
+                if len(set(positions)) != len(positions):
+                    raise ValueError("Keyframe: positions must not contain duplicates.")
+                if positions[0] < 0 or positions[-1] >= target_frames:
+                    raise ValueError(
+                        f"Keyframe: all positions must be in [0, {target_frames - 1}]."
+                    )
+            else:
+                if B == 1:
+                    positions = [0]
+                else:
+                    positions = [round(i * (target_frames - 1) / (B - 1)) for i in range(B)]
+
+            mask_parts, ctrl_parts = [], []
+            prev_end = 0
+            for i, pos in enumerate(positions):
+                gap = pos - prev_end
+                if gap > 0:
+                    mask_parts.append(solid(gap, WHITE))
+                    ctrl_parts.append(solid(gap, GREY))
+                mask_parts.append(solid(1, BLACK))
+                ctrl_parts.append(source_clip[i:i+1])
+                prev_end = pos + 1
+
+            trailing = target_frames - prev_end
+            if trailing > 0:
+                mask_parts.append(solid(trailing, WHITE))
+                ctrl_parts.append(solid(trailing, GREY))
+
+            mask = torch.cat(mask_parts, dim=0)
+            control_frames = torch.cat(ctrl_parts, dim=0)
+            frames_to_generate = target_frames - B
             return (mask, control_frames, source_clip, ph(), ph(), ph(), frames_to_generate)
 
         raise ValueError(f"Unknown mode: {mode}")

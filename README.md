@@ -18,11 +18,12 @@ Restart ComfyUI. The node appears under the **VACE Tools** category.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor) |
-| `mode` | ENUM | `End Extend` | Generation mode (see below). 9 modes available. |
-| `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint. |
-| `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. |
-| `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Replace/Inpaint: number of frames to replace. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint. |
+| `mode` | ENUM | `End Extend` | Generation mode (see below). 10 modes available. |
+| `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Used by Keyframe to set output length. Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint. |
+| `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join/Keyframe. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. |
+| `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Replace/Inpaint: number of frames to replace. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint/Keyframe. |
 | `inpaint_mask` | MASK | *(optional)* | Spatial inpaint mask for Video Inpaint mode (B, H, W). White (1.0) = regenerate, Black (0.0) = keep. Single frame broadcasts to all source frames. |
+| `keyframe_positions` | STRING | *(optional)* | Comma-separated frame indices for Keyframe mode (e.g. `0,20,50,80`). One position per source frame, sorted ascending, within [0, target_frames-1]. Leave empty for even auto-spread. |
 
 ### Outputs
 
@@ -232,6 +233,31 @@ control_frames: [ source pixels where mask=0, grey where mask=1   ]
 | Segment | Content |
 |---|---|
 | `segment_1` | Full source clip |
+| `segment_2`–`4` | Placeholder |
+
+---
+
+### Keyframe
+
+Place keyframe images at specific positions within a `target_frames`-length output, and generate everything between them.
+
+- **`source_clip`** — a small batch of keyframe images (e.g. 4 frames).
+- **`target_frames`** — total output frame count.
+- **`keyframe_positions`** *(optional)* — comma-separated frame indices (e.g. `"0,20,50,80"`). Must have one value per source frame, sorted ascending, no duplicates, all within [0, target_frames-1]. Leave empty for **auto-spread** (first keyframe at frame 0, last at `target_frames-1`, others evenly distributed).
+- **`split_index`**, **`edge_frames`** — unused.
+- **`frames_to_generate`** = `target_frames − source_frames`
+- **Total output** = `target_frames`
+
+```
+Example: 4 keyframes, target_frames=81, positions auto-spread to 0,27,53,80
+
+mask:           [ B ][ W×26 ][ B ][ W×25 ][ B ][ W×26 ][ B ]
+control_frames: [ k0][ GREY ][ k1][ GREY ][ k2][ GREY ][ k3]
+```
+
+| Segment | Content |
+|---|---|
+| `segment_1` | Full source clip (keyframe images) |
 | `segment_2`–`4` | Placeholder |
 
 ## Dependencies
