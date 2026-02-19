@@ -6,7 +6,7 @@ A single ComfyUI node that replaces ~149 manually wired nodes for generating VAC
 
 ```bash
 cd ComfyUI/custom_nodes/
-git clone https://github.com/your-user/ComfyUI-VACE-Tools.git
+git clone https://github.com/ethanfel/Comfyui-VACE-Tools.git
 ```
 
 Restart ComfyUI. The node appears under the **VACE Tools** category.
