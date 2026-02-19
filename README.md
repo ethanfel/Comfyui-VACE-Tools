@@ -18,10 +18,10 @@ Restart ComfyUI. The node appears under the **VACE Tools** category.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor) |
-| `mode` | ENUM | `End Extend` | Generation mode (see below) |
-| `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000) |
-| `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join. |
-| `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Unused by End/Pre/Middle. |
+| `mode` | ENUM | `End Extend` | Generation mode (see below). 8 modes available. |
+| `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Unused by Frame Interpolation and Replace/Inpaint. |
+| `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. |
+| `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Replace/Inpaint: number of frames to replace. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation. |
 
 ### Outputs
 
@@ -142,6 +142,69 @@ control_frames: [ part_2         ][ GREY  × generated ][ part_3         ]
 | `segment_2` | Part 2 — trailing edge of first half |
 | `segment_3` | Part 3 — leading edge of second half |
 | `segment_4` | Part 4 — second half minus its leading edge |
+
+---
+
+### Bidirectional Extend
+
+Generate new frames **both before and after** the source clip.
+
+- **`split_index`** — number of generated frames to place before the clip. `0` = even split (half before, half after).
+- **`target_frames`** — total output frame count.
+- **`frames_to_generate`** = `target_frames − source_frames`
+
+```
+mask:           [ WHITE × pre ][ BLACK × source ][ WHITE × post ]
+control_frames: [ GREY  × pre ][ source clip    ][ GREY  × post ]
+```
+
+| Segment | Content |
+|---|---|
+| `segment_1` | Full source clip |
+| `segment_2`–`4` | Placeholder |
+
+---
+
+### Frame Interpolation
+
+Insert generated frames **between each consecutive pair** of source frames.
+
+- **`split_index`** — number of new frames to insert per gap (min 1). `target_frames` is unused.
+- **`frames_to_generate`** = `(source_frames − 1) × split_index`
+- **Total output** = `source_frames + frames_to_generate`
+
+```
+mask:           [ B ][ W×step ][ B ][ W×step ][ B ] ...
+control_frames: [ f0][ GREY   ][ f1][ GREY   ][ f2] ...
+```
+
+| Segment | Content |
+|---|---|
+| `segment_1` | Full source clip |
+| `segment_2`–`4` | Placeholder |
+
+---
+
+### Replace/Inpaint
+
+Regenerate a range of frames **in-place** within the source clip.
+
+- **`split_index`** — start index of the region to replace (clamped to source length).
+- **`edge_frames`** — number of frames to replace (clamped to remaining frames after start).
+- **`frames_to_generate`** = `edge_frames` (after clamping). `target_frames` is unused.
+- **Total output** = `source_frames` (same length — in-place replacement).
+
+```
+mask:           [ BLACK × before ][ WHITE × replace ][ BLACK × after ]
+control_frames: [ before frames  ][ GREY  × replace ][ after frames  ]
+```
+
+| Segment | Content |
+|---|---|
+| `segment_1` | Before — source[:start] |
+| `segment_2` | Original replaced frames — source[start:start+length] |
+| `segment_3` | After — source[start+length:] |
+| `segment_4` | Placeholder |
 
 ## Dependencies
 
