@@ -34,14 +34,35 @@ class VACEMaskGenerator:
         "frames_to_generate",
     )
     OUTPUT_TOOLTIPS = (
-        "Black/white mask sequence (target_frames long). Black = keep original, White = generate new.",
-        "Source frames composited with grey (#7f7f7f) fill (target_frames long). Fed to VACE as visual reference.",
-        "First clip segment. Contents depend on mode.",
-        "Second clip segment. Placeholder if unused by the current mode.",
-        "Third clip segment. Placeholder if unused by the current mode.",
-        "Fourth clip segment. Placeholder if unused by the current mode.",
+        "Mask sequence — black (0) = keep original, white (1) = generate. Per-frame for most modes; per-pixel for Video Inpaint.",
+        "Visual reference for VACE — source pixels where mask is black, grey (#7f7f7f) fill where mask is white.",
+        "Segment 1: source/context frames. End/Pre/Bidirectional/Frame Interpolation/Video Inpaint: full clip. Middle: part A. Edge: start edge. Join: part 1. Replace/Inpaint: frames before replaced region.",
+        "Segment 2: secondary context. Middle: part B. Edge: middle remainder. Join: part 2. Replace/Inpaint: original replaced frames. Others: placeholder.",
+        "Segment 3: Edge: end edge. Join: part 3. Replace/Inpaint: frames after replaced region. Others: placeholder.",
+        "Segment 4: Join: part 4. Others: placeholder.",
         "Number of new frames to generate (white/grey frames added).",
     )
+    DESCRIPTION = """VACE Mask Generator — builds mask + control_frames sequences for all VACE generation modes.
+
+Modes:
+  End Extend          — generate after the clip
+  Pre Extend          — generate before the clip
+  Middle Extend       — generate between two halves (split at split_index)
+  Edge Extend         — generate between end and start edges (looping)
+  Join Extend         — heal two halves with edge_frames context each side
+  Bidirectional       — generate before AND after the clip
+  Frame Interpolation — insert new frames between each source pair
+  Replace/Inpaint     — regenerate a range of frames in-place
+  Video Inpaint       — regenerate masked spatial regions (requires inpaint_mask)
+
+Mask colors: Black = keep original, White = generate new.
+Control frames: original pixels where kept, grey (#7f7f7f) where generating.
+
+Parameter usage by mode:
+  target_frames : End, Pre, Middle, Edge, Join, Bidirectional
+  split_index   : End, Pre, Middle, Bidirectional, Frame Interpolation, Replace/Inpaint
+  edge_frames   : Edge, Join, Replace/Inpaint
+  inpaint_mask  : Video Inpaint only"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -80,7 +101,7 @@ class VACEMaskGenerator:
                         "default": 0,
                         "min": -10000,
                         "max": 10000,
-                        "description": "Where to split the source. End: trim from end (e.g. -16). Pre: reference frames from start (e.g. 24). Middle: split frame index. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region.",
+                        "description": "Where to split the source. End: trim from end (e.g. -16). Pre: reference frames from start (e.g. 24). Middle: split frame index. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by Video Inpaint.",
                     },
                 ),
                 "edge_frames": (
@@ -89,7 +110,7 @@ class VACEMaskGenerator:
                         "default": 8,
                         "min": 1,
                         "max": 10000,
-                        "description": "Number of edge frames to use for Edge and Join modes. Unused by End/Pre/Middle. Replace/Inpaint: number of frames to replace.",
+                        "description": "Number of edge frames to use for Edge and Join modes. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint. Replace/Inpaint: number of frames to replace.",
                     },
                 ),
             },
