@@ -64,7 +64,10 @@ Parameter usage by mode:
   split_index        : End, Pre, Middle, Bidirectional, Frame Interpolation, Replace/Inpaint
   edge_frames        : Edge, Join, Replace/Inpaint
   inpaint_mask       : Video Inpaint only
-  keyframe_positions : Keyframe only (optional)"""
+  keyframe_positions : Keyframe only (optional)
+
+Note: source_clip must not exceed target_frames for modes that use it.
+If your source is longer, use VACE Source Prep upstream to trim it first."""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -139,6 +142,15 @@ Parameter usage by mode:
     def generate(self, source_clip, mode, target_frames, split_index, edge_frames, inpaint_mask=None, keyframe_positions=None):
         B, H, W, C = source_clip.shape
         dev = source_clip.device
+
+        modes_using_target = {"End Extend", "Pre Extend", "Middle Extend", "Edge Extend",
+                              "Join Extend", "Bidirectional Extend", "Keyframe"}
+        if mode in modes_using_target and B > target_frames:
+            raise ValueError(
+                f"{mode}: source_clip has {B} frames but target_frames is {target_frames}. "
+                "Use VACE Source Prep to trim long clips."
+            )
+
         BLACK = 0.0
         WHITE = 1.0
         GREY = 0.498
@@ -315,10 +327,250 @@ Parameter usage by mode:
         raise ValueError(f"Unknown mode: {mode}")
 
 
+class VACESourcePrep:
+    CATEGORY = "VACE Tools"
+    FUNCTION = "prepare"
+    RETURN_TYPES = ("IMAGE", "STRING", "INT", "INT", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "MASK", "STRING")
+    RETURN_NAMES = (
+        "source_clip", "mode", "split_index", "edge_frames",
+        "segment_1", "segment_2", "segment_3", "segment_4",
+        "inpaint_mask", "keyframe_positions",
+    )
+    OUTPUT_TOOLTIPS = (
+        "Trimmed source frames — wire to VACE Mask Generator's source_clip.",
+        "Selected mode — wire to VACE Mask Generator's mode (convert widget to input).",
+        "Adjusted split_index for the trimmed clip — wire to VACE Mask Generator.",
+        "Adjusted edge_frames — wire to VACE Mask Generator.",
+        "Segment 1: End/Pre/Bidirectional/Frame Interpolation/Video Inpaint/Keyframe: full output clip. Middle: part A. Edge: start edge. Join: part 1. Replace/Inpaint: before region.",
+        "Segment 2: Middle: part B. Edge: discarded middle. Join: part 2. Replace/Inpaint: replace region. Others: placeholder.",
+        "Segment 3: Edge: end edge. Join: part 3. Replace/Inpaint: after region. Others: placeholder.",
+        "Segment 4: Join: part 4. Others: placeholder.",
+        "Inpaint mask trimmed to match output — wire to VACE Mask Generator.",
+        "Keyframe positions pass-through — wire to VACE Mask Generator.",
+    )
+    DESCRIPTION = """VACE Source Prep — trims long source clips for VACE Mask Generator.
+
+Use this node BEFORE VACE Mask Generator when your source clip is longer than target_frames.
+It selects the relevant frames based on mode, input_left, and input_right, then outputs
+adjusted parameters to wire directly into the mask generator.
+
+input_left / input_right (0 = use all available):
+  End Extend:          input_left = trailing context frames to keep
+  Pre Extend:          input_right = leading reference frames to keep
+  Middle Extend:       input_left/input_right = frames each side of split
+  Edge Extend:         input_left/input_right = start/end edge size (overrides edge_frames)
+  Join Extend:         input_left/input_right = edge context from each half
+  Bidirectional:       input_left = trailing context frames to keep
+  Frame Interpolation: pass-through (no trimming)
+  Replace/Inpaint:     input_left/input_right = context frames around replace region
+  Video Inpaint:       pass-through (no trimming)
+  Keyframe:            pass-through (no trimming)"""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "source_clip": ("IMAGE", {"description": "Full source video frames (B,H,W,C tensor)."}),
+                "mode": (
+                    [
+                        "End Extend",
+                        "Pre Extend",
+                        "Middle Extend",
+                        "Edge Extend",
+                        "Join Extend",
+                        "Bidirectional Extend",
+                        "Frame Interpolation",
+                        "Replace/Inpaint",
+                        "Video Inpaint",
+                        "Keyframe",
+                    ],
+                    {
+                        "default": "End Extend",
+                        "description": "Generation mode — must match VACE Mask Generator's mode.",
+                    },
+                ),
+                "split_index": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": -10000,
+                        "max": 10000,
+                        "description": "Split position in the full source video. Same meaning as mask generator's split_index.",
+                    },
+                ),
+                "input_left": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 10000,
+                        "description": "Frames from the left side of the split point to keep (0 = all available). "
+                                       "End: trailing context. Middle: frames before split. Edge/Join: start edge size. "
+                                       "Bidirectional: trailing context. Replace: context before region.",
+                    },
+                ),
+                "input_right": (
+                    "INT",
+                    {
+                        "default": 0,
+                        "min": 0,
+                        "max": 10000,
+                        "description": "Frames from the right side of the split point to keep (0 = all available). "
+                                       "Pre: leading reference. Middle: frames after split. Edge/Join: end edge size. "
+                                       "Replace: context after region.",
+                    },
+                ),
+                "edge_frames": (
+                    "INT",
+                    {
+                        "default": 8,
+                        "min": 1,
+                        "max": 10000,
+                        "description": "Default edge size for Edge/Join modes (overridden by input_left/input_right if non-zero). "
+                                       "Replace/Inpaint: number of frames to replace.",
+                    },
+                ),
+            },
+            "optional": {
+                "inpaint_mask": (
+                    "MASK",
+                    {
+                        "description": "Spatial inpaint mask — trimmed to match output frames for Video Inpaint mode.",
+                    },
+                ),
+                "keyframe_positions": (
+                    "STRING",
+                    {
+                        "default": "",
+                        "description": "Keyframe positions pass-through for Keyframe mode.",
+                    },
+                ),
+            },
+        }
+
+    def prepare(self, source_clip, mode, split_index, input_left, input_right, edge_frames, inpaint_mask=None, keyframe_positions=None):
+        B, H, W, C = source_clip.shape
+        dev = source_clip.device
+
+        def ph():
+            return _placeholder(H, W, dev)
+
+        def safe(t):
+            return _ensure_nonempty(t, H, W, dev)
+
+        def mask_ph():
+            return torch.zeros((1, H, W), dtype=torch.float32, device=dev)
+
+        def trim_mask(start, end):
+            if inpaint_mask is None:
+                return mask_ph()
+            m = inpaint_mask.to(dev)
+            if m.shape[0] == 1:
+                return m
+            actual_end = min(end, m.shape[0])
+            actual_start = min(start, actual_end)
+            trimmed = m[actual_start:actual_end]
+            if trimmed.shape[0] == 0:
+                return mask_ph()
+            return trimmed
+
+        kp_out = keyframe_positions if keyframe_positions else ""
+
+        if mode == "End Extend":
+            if input_left > 0:
+                start = max(0, B - input_left)
+                output = source_clip[start:]
+            else:
+                output = source_clip
+                start = 0
+            return (output, mode, 0, edge_frames, safe(output), ph(), ph(), ph(), trim_mask(start, B), kp_out)
+
+        elif mode == "Pre Extend":
+            if input_right > 0:
+                end = min(B, input_right)
+                output = source_clip[:end]
+            else:
+                output = source_clip
+                end = B
+            return (output, mode, output.shape[0], edge_frames, safe(output), ph(), ph(), ph(), trim_mask(0, end), kp_out)
+
+        elif mode == "Middle Extend":
+            left_start = max(0, split_index - input_left) if input_left > 0 else 0
+            right_end = min(B, split_index + input_right) if input_right > 0 else B
+            output = source_clip[left_start:right_end]
+            out_split = split_index - left_start
+            part_a = source_clip[left_start:split_index]
+            part_b = source_clip[split_index:right_end]
+            return (output, mode, out_split, edge_frames, safe(part_a), safe(part_b), ph(), ph(), trim_mask(left_start, right_end), kp_out)
+
+        elif mode == "Edge Extend":
+            eff_left = min(input_left if input_left > 0 else edge_frames, B)
+            eff_right = min(input_right if input_right > 0 else edge_frames, B)
+            sym = min(eff_left, eff_right)
+            start_seg = source_clip[:sym]
+            end_seg = source_clip[-sym:] if sym > 0 else source_clip[:0]
+            mid_seg = source_clip[sym:B - sym] if 2 * sym < B else source_clip[:0]
+            output = torch.cat([start_seg, end_seg], dim=0)
+            return (output, mode, 0, sym, safe(start_seg), safe(mid_seg), safe(end_seg), ph(), mask_ph(), kp_out)
+
+        elif mode == "Join Extend":
+            half = B // 2
+            first_half = source_clip[:half]
+            second_half = source_clip[half:]
+            eff_left = input_left if input_left > 0 else edge_frames
+            eff_right = input_right if input_right > 0 else edge_frames
+            eff_left = min(eff_left, first_half.shape[0])
+            eff_right = min(eff_right, second_half.shape[0])
+            sym = min(eff_left, eff_right)
+            part_1 = first_half[:-sym] if sym < first_half.shape[0] else first_half[:0]
+            part_2 = first_half[-sym:]
+            part_3 = second_half[:sym]
+            part_4 = second_half[sym:]
+            output = torch.cat([part_2, part_3], dim=0)
+            return (output, mode, 0, sym, safe(part_1), safe(part_2), safe(part_3), safe(part_4), mask_ph(), kp_out)
+
+        elif mode == "Bidirectional Extend":
+            if input_left > 0:
+                start = max(0, B - input_left)
+                output = source_clip[start:]
+            else:
+                output = source_clip
+                start = 0
+            return (output, mode, split_index, edge_frames, safe(output), ph(), ph(), ph(), trim_mask(start, B), kp_out)
+
+        elif mode == "Frame Interpolation":
+            return (source_clip, mode, split_index, edge_frames, safe(source_clip), ph(), ph(), ph(), trim_mask(0, B), kp_out)
+
+        elif mode == "Replace/Inpaint":
+            start = max(0, min(split_index, B))
+            end_idx = min(start + edge_frames, B)
+            length = end_idx - start
+            ctx_start = max(0, start - input_left) if input_left > 0 else 0
+            ctx_end = min(B, end_idx + input_right) if input_right > 0 else B
+            before = source_clip[ctx_start:start]
+            replace_region = source_clip[start:end_idx]
+            after = source_clip[end_idx:ctx_end]
+            output = torch.cat([before, replace_region, after], dim=0)
+            out_split = before.shape[0]
+            out_edge = length
+            return (output, mode, out_split, out_edge, safe(before), safe(replace_region), safe(after), ph(), trim_mask(ctx_start, ctx_end), kp_out)
+
+        elif mode == "Video Inpaint":
+            out_mask = inpaint_mask.to(dev) if inpaint_mask is not None else mask_ph()
+            return (source_clip, mode, split_index, edge_frames, safe(source_clip), ph(), ph(), ph(), out_mask, kp_out)
+
+        elif mode == "Keyframe":
+            return (source_clip, mode, split_index, edge_frames, safe(source_clip), ph(), ph(), ph(), mask_ph(), kp_out)
+
+        raise ValueError(f"Unknown mode: {mode}")
+
+
 NODE_CLASS_MAPPINGS = {
     "VACEMaskGenerator": VACEMaskGenerator,
+    "VACESourcePrep": VACESourcePrep,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "VACEMaskGenerator": "VACE Mask Generator",
+    "VACESourcePrep": "VACE Source Prep",
 }

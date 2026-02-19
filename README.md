@@ -11,13 +11,65 @@ git clone https://github.com/ethanfel/Comfyui-VACE-Tools.git
 
 Restart ComfyUI. Nodes appear under the **VACE Tools** and **WanVideoWrapper** categories.
 
-## Node: VACE Mask Generator
+## Node: VACE Source Prep
+
+Trims long source clips so they can be used with VACE Mask Generator. Place this node **before** the mask generator when your source clip has more frames than `target_frames`. It selects the relevant frames based on mode and outputs adjusted parameters to wire directly into the mask generator.
+
+Irrelevant widgets are automatically hidden based on the selected mode.
 
 ### Inputs
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor) |
+| `source_clip` | IMAGE | — | Full source video frames (B, H, W, C tensor). |
+| `mode` | ENUM | `End Extend` | Generation mode — must match the mask generator's mode. |
+| `split_index` | INT | `0` | Split position in the full source video. Same meaning as the mask generator's split_index. |
+| `input_left` | INT | `0` | Frames from the left side of the split point to keep (0 = all available). End: trailing context. Middle: frames before split. Edge/Join: start edge size. Bidirectional: trailing context. Replace: context before region. |
+| `input_right` | INT | `0` | Frames from the right side of the split point to keep (0 = all available). Pre: leading reference. Middle: frames after split. Edge/Join: end edge size. Replace: context after region. |
+| `edge_frames` | INT | `8` | Default edge size for Edge/Join modes (overridden by input_left/input_right if non-zero). Replace/Inpaint: number of frames to replace. |
+| `inpaint_mask` | MASK | *(optional)* | Spatial inpaint mask — trimmed to match output frames for Video Inpaint mode. |
+| `keyframe_positions` | STRING | *(optional)* | Keyframe positions pass-through for Keyframe mode. |
+
+### Outputs
+
+| Output | Type | Description |
+|---|---|---|
+| `source_clip` | IMAGE | Trimmed frames — wire to mask generator's source_clip. |
+| `mode` | STRING | Selected mode — wire to mask generator's mode (convert widget to input). |
+| `split_index` | INT | Adjusted for the trimmed clip — wire to mask generator. |
+| `edge_frames` | INT | Adjusted/passed through — wire to mask generator. |
+| `segment_1`–`segment_4` | IMAGE | Frame segments per mode (same meaning as mask generator segments). Unused segments are 1-frame black placeholders. |
+| `inpaint_mask` | MASK | Trimmed to match output, or placeholder. |
+| `keyframe_positions` | STRING | Pass-through. |
+
+### Per-Mode Trimming
+
+| Mode | input_left | input_right | Behavior |
+|---|---|---|---|
+| End Extend | Trailing context frames | — | Keeps last N frames |
+| Pre Extend | — | Leading reference frames | Keeps first N frames |
+| Middle Extend | Frames before split | Frames after split | Window around split_index |
+| Edge Extend | Start edge size | End edge size | Overrides edge_frames; forced symmetric (min of both) |
+| Join Extend | Edge from first half | Edge from second half | Edge context around midpoint; forced symmetric |
+| Bidirectional | Trailing context frames | — | Keeps last N frames |
+| Frame Interpolation | — | — | Pass-through (no trimming) |
+| Replace/Inpaint | Context before region | Context after region | Window around replace region |
+| Video Inpaint | — | — | Pass-through (no trimming) |
+| Keyframe | — | — | Pass-through (no trimming) |
+
+---
+
+## Node: VACE Mask Generator
+
+Builds mask and control_frames sequences for all VACE generation modes. Works standalone for short clips, or downstream of VACE Source Prep for long clips.
+
+**Note:** For modes that use `target_frames` (End, Pre, Middle, Edge, Join, Bidirectional, Keyframe), `source_clip` must not have more frames than `target_frames`. If your source is longer, use VACE Source Prep upstream to trim it first.
+
+### Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor). Must not exceed target_frames for modes that use it. |
 | `mode` | ENUM | `End Extend` | Generation mode (see below). 10 modes available. |
 | `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Used by Keyframe to set output length. Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint. |
 | `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join/Keyframe. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. |
