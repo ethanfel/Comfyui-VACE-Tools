@@ -18,10 +18,11 @@ Restart ComfyUI. The node appears under the **VACE Tools** category.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor) |
-| `mode` | ENUM | `End Extend` | Generation mode (see below). 8 modes available. |
-| `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Unused by Frame Interpolation and Replace/Inpaint. |
+| `mode` | ENUM | `End Extend` | Generation mode (see below). 9 modes available. |
+| `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint. |
 | `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. |
-| `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Replace/Inpaint: number of frames to replace. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation. |
+| `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Replace/Inpaint: number of frames to replace. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint. |
+| `inpaint_mask` | MASK | *(optional)* | Spatial inpaint mask for Video Inpaint mode (B, H, W). White (1.0) = regenerate, Black (0.0) = keep. Single frame broadcasts to all source frames. |
 
 ### Outputs
 
@@ -205,6 +206,33 @@ control_frames: [ before frames  ][ GREY  × replace ][ after frames  ]
 | `segment_2` | Original replaced frames — source[start:start+length] |
 | `segment_3` | After — source[start+length:] |
 | `segment_4` | Placeholder |
+
+---
+
+### Video Inpaint
+
+Regenerate **spatial regions** within frames using a per-pixel mask. Unlike other modes that work at the frame level (entire frames kept or generated), Video Inpaint operates at the pixel level — masked regions are regenerated while the rest of each frame is preserved.
+
+- **`inpaint_mask`** *(required)* — a `MASK` (B, H, W) where white (1.0) marks regions to regenerate and black (0.0) marks regions to keep. A single-frame mask is automatically broadcast to all source frames; a multi-frame mask must have the same frame count as `source_clip`.
+- **`target_frames`**, **`split_index`**, **`edge_frames`** — unused.
+- **`frames_to_generate`** = `source_frames` (all frames are partially regenerated).
+- **Total output** = `source_frames` (same length — in-place spatial replacement).
+
+Compositing formula per pixel:
+
+```
+control_frames = source × (1 − mask) + grey × mask
+```
+
+```
+mask:           [ per-pixel mask broadcast to (B, H, W, 3)        ]
+control_frames: [ source pixels where mask=0, grey where mask=1   ]
+```
+
+| Segment | Content |
+|---|---|
+| `segment_1` | Full source clip |
+| `segment_2`–`4` | Placeholder |
 
 ## Dependencies
 
