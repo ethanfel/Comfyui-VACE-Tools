@@ -83,7 +83,6 @@ Builds mask and control_frames sequences for all VACE generation modes. Works st
 |---|---|
 | `mask` | Black/white frame sequence (`target_frames` long). Black = keep, White = generate. |
 | `control_frames` | Source frames composited with grey (`#7f7f7f`) fill (`target_frames` long). Fed to VACE as visual reference. |
-| `segment_1`–`segment_4` | Clip segments whose contents depend on the mode (see below). Unused segments are 1-frame black placeholders. |
 | `frames_to_generate` | INT — number of new frames the model needs to produce (the white/grey region). |
 
 ## Mode Reference
@@ -104,11 +103,6 @@ mask:           [ BLACK × source ][ WHITE × generated ]
 control_frames: [ source clip    ][ GREY  × generated ]
 ```
 
-| Segment | Content |
-|---|---|
-| `segment_1` | Source frames (trimmed if `split_index ≠ 0`) |
-| `segment_2`–`4` | Placeholder |
-
 ---
 
 ### Pre Extend
@@ -123,11 +117,6 @@ mask:           [ WHITE × generated ][ BLACK × reference ]
 control_frames: [ GREY  × generated ][ reference frames  ]
 ```
 
-| Segment | Content |
-|---|---|
-| `segment_1` | Remaining frames after the reference (source[split_index:]) |
-| `segment_2`–`4` | Placeholder |
-
 ---
 
 ### Middle Extend
@@ -141,12 +130,6 @@ Generate new frames **between** two halves of the source clip, split at `split_i
 mask:           [ BLACK × part_a ][ WHITE × generated ][ BLACK × part_b ]
 control_frames: [ part_a         ][ GREY  × generated ][ part_b         ]
 ```
-
-| Segment | Content |
-|---|---|
-| `segment_1` | Part A — source[:split_index] |
-| `segment_2` | Part B — source[split_index:] |
-| `segment_3`–`4` | Placeholder |
 
 ---
 
@@ -164,13 +147,6 @@ The end segment is placed first, then the generated gap, then the start segment 
 mask:           [ BLACK × end_seg ][ WHITE × generated ][ BLACK × start_seg ]
 control_frames: [ end_seg         ][ GREY  × generated ][ start_seg         ]
 ```
-
-| Segment | Content |
-|---|---|
-| `segment_1` | Start edge — source[:edge_frames] |
-| `segment_2` | Middle remainder — source[edge_frames:−edge_frames] |
-| `segment_3` | End edge — source[−edge_frames:] |
-| `segment_4` | Placeholder |
 
 ---
 
@@ -190,13 +166,6 @@ mask:           [ BLACK × part_2 ][ WHITE × generated ][ BLACK × part_3 ]
 control_frames: [ part_2         ][ GREY  × generated ][ part_3         ]
 ```
 
-| Segment | Content |
-|---|---|
-| `segment_1` | Part 1 — first half minus its trailing edge |
-| `segment_2` | Part 2 — trailing edge of first half |
-| `segment_3` | Part 3 — leading edge of second half |
-| `segment_4` | Part 4 — second half minus its leading edge |
-
 ---
 
 ### Bidirectional Extend
@@ -211,11 +180,6 @@ Generate new frames **both before and after** the source clip.
 mask:           [ WHITE × pre ][ BLACK × source ][ WHITE × post ]
 control_frames: [ GREY  × pre ][ source clip    ][ GREY  × post ]
 ```
-
-| Segment | Content |
-|---|---|
-| `segment_1` | Full source clip |
-| `segment_2`–`4` | Placeholder |
 
 ---
 
@@ -232,11 +196,6 @@ mask:           [ B ][ W×step ][ B ][ W×step ][ B ] ...
 control_frames: [ f0][ GREY   ][ f1][ GREY   ][ f2] ...
 ```
 
-| Segment | Content |
-|---|---|
-| `segment_1` | Full source clip |
-| `segment_2`–`4` | Placeholder |
-
 ---
 
 ### Replace/Inpaint
@@ -252,13 +211,6 @@ Regenerate a range of frames **in-place** within the source clip.
 mask:           [ BLACK × before ][ WHITE × replace ][ BLACK × after ]
 control_frames: [ before frames  ][ GREY  × replace ][ after frames  ]
 ```
-
-| Segment | Content |
-|---|---|
-| `segment_1` | Before — source[:start] |
-| `segment_2` | Original replaced frames — source[start:start+length] |
-| `segment_3` | After — source[start+length:] |
-| `segment_4` | Placeholder |
 
 ---
 
@@ -282,11 +234,6 @@ mask:           [ per-pixel mask broadcast to (B, H, W, 3)        ]
 control_frames: [ source pixels where mask=0, grey where mask=1   ]
 ```
 
-| Segment | Content |
-|---|---|
-| `segment_1` | Full source clip |
-| `segment_2`–`4` | Placeholder |
-
 ---
 
 ### Keyframe
@@ -306,11 +253,6 @@ Example: 4 keyframes, target_frames=81, positions auto-spread to 0,27,53,80
 mask:           [ B ][ W×26 ][ B ][ W×25 ][ B ][ W×26 ][ B ]
 control_frames: [ k0][ GREY ][ k1][ GREY ][ k2][ GREY ][ k3]
 ```
-
-| Segment | Content |
-|---|---|
-| `segment_1` | Full source clip (keyframe images) |
-| `segment_2`–`4` | Placeholder |
 
 ---
 
