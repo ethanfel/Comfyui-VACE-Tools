@@ -41,6 +41,8 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 | `segment_1`–`segment_4` | IMAGE | Frame segments per mode (same meaning as mask generator segments). Unused segments are 1-frame black placeholders. |
 | `inpaint_mask` | MASK | Trimmed to match output, or placeholder. |
 | `keyframe_positions` | STRING | Pass-through. |
+| `trim_start` | INT | Start index of the trimmed region in the original clip — wire to VACE Merge Back. |
+| `trim_end` | INT | End index of the trimmed region in the original clip — wire to VACE Merge Back. |
 
 ### Per-Mode Trimming
 
@@ -314,6 +316,72 @@ control_frames: [ k0][ GREY ][ k1][ GREY ][ k2][ GREY ][ k3]
 
 ---
 
+## Node: VACE Merge Back
+
+Splices VACE sampler output back into the original full-length video. Connect the original (untrimmed) clip, the VACE sampler output, the mask from VACE Mask Generator, and the `mode`/`trim_start`/`trim_end` from VACE Source Prep.
+
+Irrelevant widgets are automatically hidden based on the selected blend method.
+
+### Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `original_clip` | IMAGE | — | Full original video (before any trimming). |
+| `vace_output` | IMAGE | — | VACE sampler output. |
+| `mask` | IMAGE | — | Mask from VACE Mask Generator — BLACK=context, WHITE=generated. |
+| `mode` | STRING | *(wired)* | Mode from VACE Source Prep (must be wired, not typed). |
+| `trim_start` | INT | *(wired)* | Start of trimmed region in original (from VACE Source Prep). |
+| `trim_end` | INT | *(wired)* | End of trimmed region in original (from VACE Source Prep). |
+| `blend_frames` | INT | `4` | Context frames to blend at each seam (0 = hard cut). |
+| `blend_method` | ENUM | `optical_flow` | `none` (hard cut), `alpha` (linear crossfade), or `optical_flow` (motion-compensated). |
+| `of_preset` | ENUM | `balanced` | Optical flow quality: `fast`, `balanced`, `quality`, `max`. |
+
+### Outputs
+
+| Output | Type | Description |
+|---|---|---|
+| `merged_clip` | IMAGE | Full reconstructed video. |
+
+### Behavior
+
+**Pass-through modes** (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint): returns `vace_output` as-is — the VACE output IS the final result for these modes.
+
+**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `original[:trim_start] + vace_output + original[trim_end:]`, then blends at the seams where context frames meet original frames.
+
+The node detects context zones by counting consecutive black frames at the start and end of the mask. At each seam, `blend_frames` frames are blended with a smooth alpha ramp. Optical flow blending warps both frames along the motion field before blending, reducing ghosting on moving subjects.
+
+### Example: Middle Extend
+
+```
+Original:  274 frames (0–273)
+Prep:      split_index=137, input_left=16, input_right=16
+           → trim_start=121, trim_end=153, trimmed=32 frames
+Mask Gen:  target_frames=81
+           → mask = [BLACK×16] [WHITE×49] [BLACK×16]
+VACE out:  81 frames (from sampler)
+Merge:     result = original[0:121] + vace[0:81] + original[153:274]
+           → 121 + 81 + 121 = 323 frames
+           Left blend:  vace[0..3] ↔ original[121..124]
+           Right blend: vace[77..80] ↔ original[149..152]
+```
+
+### Wiring Diagram
+
+```
+[Load Video]
+     │
+     ├─ source_clip ──→ [VACESourcePrep] ─┬─ source_clip ──→ [MaskGen] ─→ mask ──┐
+     │                                     ├─ mode ───────────────────────────────┤
+     │                                     ├─ trim_start ─────────────────────────┤
+     │                                     └─ trim_end ──────────────────────────┤
+     │                                                                            │
+     └─ original_clip ───────────────────────────────────────────────────────────→ [VACEMergeBack]
+                                                                                  │
+                                        [Sampler] ─→ vace_output ────────────────┘
+```
+
+---
+
 ## Node: WanVideo Save Merged Model
 
 Saves a WanVideo diffusion model (with merged LoRAs) as a `.safetensors` file. Found under the **WanVideoWrapper** category.
@@ -379,4 +447,5 @@ Loads a LATENT from an absolute file path. Found under the **latent** category.
 
 ## Dependencies
 
-PyTorch and safetensors, both bundled with ComfyUI.
+- **PyTorch** and **safetensors** — bundled with ComfyUI.
+- **OpenCV** (`cv2`) — optional, for optical flow blending in VACE Merge Back. Falls back to alpha blending if unavailable.
