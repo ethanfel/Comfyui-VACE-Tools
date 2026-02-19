@@ -92,9 +92,7 @@ app.registerExtension({
         }
 
         function updateVisibility(method) {
-            const showBlend = method !== "none";
             const showOf = method === "optical_flow";
-            toggleWidget(node.widgets.find(w => w.name === "blend_frames"), showBlend);
             toggleWidget(node.widgets.find(w => w.name === "of_preset"), showOf);
             node.setSize(node.computeSize());
             app.graph.setDirtyCanvas(true);

@@ -12,27 +12,6 @@ OPTICAL_FLOW_PRESETS = {
 PASS_THROUGH_MODES = {"Edge Extend", "Frame Interpolation", "Keyframe", "Video Inpaint"}
 
 
-def _count_leading_black(mask):
-    """Count consecutive black (context) frames at the start of mask."""
-    count = 0
-    for i in range(mask.shape[0]):
-        if mask[i].max().item() < 0.01:
-            count += 1
-        else:
-            break
-    return count
-
-
-def _count_trailing_black(mask):
-    """Count consecutive black (context) frames at the end of mask."""
-    count = 0
-    for i in range(mask.shape[0] - 1, -1, -1):
-        if mask[i].max().item() < 0.01:
-            count += 1
-        else:
-            break
-    return count
-
 
 def _alpha_blend(frame_a, frame_b, alpha):
     """Simple linear crossfade between two frames (H,W,3 tensors)."""
@@ -102,16 +81,15 @@ class VACEMergeBack:
     )
     DESCRIPTION = """VACE Merge Back — splices VACE sampler output back into the original full-length video.
 
-Connect the original (untrimmed) clip, the VACE sampler output, the mask from VACE Mask Generator,
-and the mode/trim_start/trim_end from VACE Source Prep. The node detects context zones from the mask
-and blends at the seams where context meets generated frames.
+Connect the original (untrimmed) clip, the VACE sampler output, and the vace_pipe from VACE Source Prep.
+The pipe carries mode, trim bounds, and context frame counts for automatic blending.
 
 Pass-through modes (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint):
   Returns vace_output as-is — the VACE output IS the final result.
 
 Splice modes (End, Pre, Middle, Join, Bidirectional, Replace):
   Reconstructs original[:trim_start] + vace_output + original[trim_end:]
-  with optional blending at the seams.
+  with automatic blending across the full context zones.
 
 Blend methods:
   none          — Hard cut at seams (fastest)
@@ -124,17 +102,19 @@ Blend methods:
             "required": {
                 "original_clip": ("IMAGE", {"description": "Full original video (before any trimming)."}),
                 "vace_output": ("IMAGE", {"description": "VACE sampler output."}),
-                "mask": ("IMAGE", {"description": "Mask from VACE Mask Generator — BLACK=context, WHITE=generated."}),
-                "mode": ("STRING", {"forceInput": True, "description": "Mode from VACE Source Prep."}),
-                "trim_start": ("INT", {"forceInput": True, "default": 0, "description": "Start of trimmed region in original."}),
-                "trim_end": ("INT", {"forceInput": True, "default": 0, "description": "End of trimmed region in original."}),
-                "blend_frames": ("INT", {"default": 4, "min": 0, "max": 100, "description": "Context frames to blend at each seam (0 = hard cut)."}),
+                "vace_pipe": ("VACE_PIPE", {"description": "Pipe from VACE Source Prep carrying mode, trim bounds, and context counts."}),
                 "blend_method": (["optical_flow", "alpha", "none"], {"default": "optical_flow", "description": "Blending method at seams."}),
                 "of_preset": (["fast", "balanced", "quality", "max"], {"default": "balanced", "description": "Optical flow quality preset."}),
             },
         }
 
-    def merge(self, original_clip, vace_output, mask, mode, trim_start, trim_end, blend_frames, blend_method, of_preset):
+    def merge(self, original_clip, vace_output, vace_pipe, blend_method, of_preset):
+        mode = vace_pipe["mode"]
+        trim_start = vace_pipe["trim_start"]
+        trim_end = vace_pipe["trim_end"]
+        left_ctx = vace_pipe["left_ctx"]
+        right_ctx = vace_pipe["right_ctx"]
+
         # Pass-through modes: VACE output IS the final result
         if mode in PASS_THROUGH_MODES:
             return (vace_output,)
@@ -145,34 +125,24 @@ Blend methods:
         tail = original_clip[trim_end:]
         result = torch.cat([head, vace_output, tail], dim=0)
 
-        if blend_method == "none" or blend_frames <= 0:
+        if blend_method == "none" or (left_ctx == 0 and right_ctx == 0):
             return (result,)
-
-        # Detect context zones from mask
-        left_ctx_len = _count_leading_black(mask)
-        right_ctx_len = _count_trailing_black(mask)
 
         def blend_frame(orig, vace, alpha):
             if blend_method == "optical_flow":
                 return _optical_flow_blend(orig, vace, alpha, of_preset)
             return _alpha_blend(orig, vace, alpha)
 
-        # Blend at LEFT seam (context → generated transition)
-        bf_left = min(blend_frames, left_ctx_len)
-        for j in range(bf_left):
-            alpha = (j + 1) / (bf_left + 1)
-            orig_frame = original_clip[trim_start + j]
-            vace_frame = vace_output[j]
-            result[trim_start + j] = blend_frame(orig_frame, vace_frame, alpha)
+        # Blend across full left context zone
+        for j in range(left_ctx):
+            alpha = (j + 1) / (left_ctx + 1)
+            result[trim_start + j] = blend_frame(original_clip[trim_start + j], vace_output[j], alpha)
 
-        # Blend at RIGHT seam (generated → context transition)
-        bf_right = min(blend_frames, right_ctx_len)
-        for j in range(bf_right):
-            alpha = 1.0 - (j + 1) / (bf_right + 1)
-            frame_idx = V - bf_right + j
-            orig_frame = original_clip[trim_end - bf_right + j]
-            vace_frame = vace_output[frame_idx]
-            result[trim_start + frame_idx] = blend_frame(orig_frame, vace_frame, alpha)
+        # Blend across full right context zone
+        for j in range(right_ctx):
+            alpha = 1.0 - (j + 1) / (right_ctx + 1)
+            frame_idx = V - right_ctx + j
+            result[trim_start + frame_idx] = blend_frame(original_clip[trim_end - right_ctx + j], vace_output[frame_idx], alpha)
 
         return (result,)
 

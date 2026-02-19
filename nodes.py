@@ -330,25 +330,19 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
 class VACESourcePrep:
     CATEGORY = "VACE Tools"
     FUNCTION = "prepare"
-    RETURN_TYPES = ("IMAGE", "STRING", "INT", "INT", "IMAGE", "IMAGE", "IMAGE", "IMAGE", "MASK", "STRING", "INT", "INT")
+    RETURN_TYPES = ("IMAGE", "STRING", "INT", "INT", "MASK", "STRING", "VACE_PIPE")
     RETURN_NAMES = (
         "source_clip", "mode", "split_index", "edge_frames",
-        "segment_1", "segment_2", "segment_3", "segment_4",
-        "inpaint_mask", "keyframe_positions", "trim_start", "trim_end",
+        "inpaint_mask", "keyframe_positions", "vace_pipe",
     )
     OUTPUT_TOOLTIPS = (
         "Trimmed source frames — wire to VACE Mask Generator's source_clip.",
         "Selected mode — wire to VACE Mask Generator's mode (convert widget to input).",
         "Adjusted split_index for the trimmed clip — wire to VACE Mask Generator.",
         "Adjusted edge_frames — wire to VACE Mask Generator.",
-        "Segment 1: End/Pre/Bidirectional/Frame Interpolation/Video Inpaint/Keyframe: full output clip. Middle: part A. Edge: start edge. Join: part 1. Replace/Inpaint: before region.",
-        "Segment 2: Middle: part B. Edge: discarded middle. Join: part 2. Replace/Inpaint: replace region. Others: placeholder.",
-        "Segment 3: Edge: end edge. Join: part 3. Replace/Inpaint: after region. Others: placeholder.",
-        "Segment 4: Join: part 4. Others: placeholder.",
         "Inpaint mask trimmed to match output — wire to VACE Mask Generator.",
         "Keyframe positions pass-through — wire to VACE Mask Generator.",
-        "Start index of the trimmed region in the original clip — wire to VACE Merge Back.",
-        "End index of the trimmed region in the original clip — wire to VACE Merge Back.",
+        "Pipe carrying mode, trim bounds, and context counts — wire to VACE Merge Back.",
     )
     DESCRIPTION = """VACE Source Prep — trims long source clips for VACE Mask Generator.
 
@@ -454,12 +448,6 @@ input_left / input_right (0 = use all available):
         B, H, W, C = source_clip.shape
         dev = source_clip.device
 
-        def ph():
-            return _placeholder(H, W, dev)
-
-        def safe(t):
-            return _ensure_nonempty(t, H, W, dev)
-
         def mask_ph():
             return torch.zeros((1, H, W), dtype=torch.float32, device=dev)
 
@@ -485,7 +473,8 @@ input_left / input_right (0 = use all available):
             else:
                 output = source_clip
                 start = 0
-            return (output, mode, 0, edge_frames, safe(output), ph(), ph(), ph(), trim_mask(start, B), kp_out, start, B)
+            pipe = {"mode": mode, "trim_start": start, "trim_end": B, "left_ctx": output.shape[0], "right_ctx": 0}
+            return (output, mode, 0, edge_frames, trim_mask(start, B), kp_out, pipe)
 
         elif mode == "Pre Extend":
             if input_right > 0:
@@ -494,7 +483,8 @@ input_left / input_right (0 = use all available):
             else:
                 output = source_clip
                 end = B
-            return (output, mode, output.shape[0], edge_frames, safe(output), ph(), ph(), ph(), trim_mask(0, end), kp_out, 0, end)
+            pipe = {"mode": mode, "trim_start": 0, "trim_end": end, "left_ctx": 0, "right_ctx": output.shape[0]}
+            return (output, mode, output.shape[0], edge_frames, trim_mask(0, end), kp_out, pipe)
 
         elif mode == "Middle Extend":
             left_start = max(0, split_index - input_left) if input_left > 0 else 0
@@ -503,7 +493,8 @@ input_left / input_right (0 = use all available):
             out_split = split_index - left_start
             part_a = source_clip[left_start:split_index]
             part_b = source_clip[split_index:right_end]
-            return (output, mode, out_split, edge_frames, safe(part_a), safe(part_b), ph(), ph(), trim_mask(left_start, right_end), kp_out, left_start, right_end)
+            pipe = {"mode": mode, "trim_start": left_start, "trim_end": right_end, "left_ctx": out_split, "right_ctx": part_b.shape[0]}
+            return (output, mode, out_split, edge_frames, trim_mask(left_start, right_end), kp_out, pipe)
 
         elif mode == "Edge Extend":
             eff_left = min(input_left if input_left > 0 else edge_frames, B)
@@ -513,7 +504,8 @@ input_left / input_right (0 = use all available):
             end_seg = source_clip[-sym:] if sym > 0 else source_clip[:0]
             mid_seg = source_clip[sym:B - sym] if 2 * sym < B else source_clip[:0]
             output = torch.cat([start_seg, end_seg], dim=0)
-            return (output, mode, 0, sym, safe(start_seg), safe(mid_seg), safe(end_seg), ph(), mask_ph(), kp_out, 0, B)
+            pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
+            return (output, mode, 0, sym, mask_ph(), kp_out, pipe)
 
         elif mode == "Join Extend":
             half = B // 2
@@ -529,7 +521,8 @@ input_left / input_right (0 = use all available):
             part_3 = second_half[:sym]
             part_4 = second_half[sym:]
             output = torch.cat([part_2, part_3], dim=0)
-            return (output, mode, 0, sym, safe(part_1), safe(part_2), safe(part_3), safe(part_4), mask_ph(), kp_out, half - sym, half + sym)
+            pipe = {"mode": mode, "trim_start": half - sym, "trim_end": half + sym, "left_ctx": sym, "right_ctx": sym}
+            return (output, mode, 0, sym, mask_ph(), kp_out, pipe)
 
         elif mode == "Bidirectional Extend":
             if input_left > 0:
@@ -538,10 +531,12 @@ input_left / input_right (0 = use all available):
             else:
                 output = source_clip
                 start = 0
-            return (output, mode, split_index, edge_frames, safe(output), ph(), ph(), ph(), trim_mask(start, B), kp_out, start, B)
+            pipe = {"mode": mode, "trim_start": start, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
+            return (output, mode, split_index, edge_frames, trim_mask(start, B), kp_out, pipe)
 
         elif mode == "Frame Interpolation":
-            return (source_clip, mode, split_index, edge_frames, safe(source_clip), ph(), ph(), ph(), trim_mask(0, B), kp_out, 0, B)
+            pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
+            return (source_clip, mode, split_index, edge_frames, trim_mask(0, B), kp_out, pipe)
 
         elif mode == "Replace/Inpaint":
             start = max(0, min(split_index, B))
@@ -555,14 +550,17 @@ input_left / input_right (0 = use all available):
             output = torch.cat([before, replace_region, after], dim=0)
             out_split = before.shape[0]
             out_edge = length
-            return (output, mode, out_split, out_edge, safe(before), safe(replace_region), safe(after), ph(), trim_mask(ctx_start, ctx_end), kp_out, ctx_start, ctx_end)
+            pipe = {"mode": mode, "trim_start": ctx_start, "trim_end": ctx_end, "left_ctx": before.shape[0], "right_ctx": after.shape[0]}
+            return (output, mode, out_split, out_edge, trim_mask(ctx_start, ctx_end), kp_out, pipe)
 
         elif mode == "Video Inpaint":
             out_mask = inpaint_mask.to(dev) if inpaint_mask is not None else mask_ph()
-            return (source_clip, mode, split_index, edge_frames, safe(source_clip), ph(), ph(), ph(), out_mask, kp_out, 0, B)
+            pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
+            return (source_clip, mode, split_index, edge_frames, out_mask, kp_out, pipe)
 
         elif mode == "Keyframe":
-            return (source_clip, mode, split_index, edge_frames, safe(source_clip), ph(), ph(), ph(), mask_ph(), kp_out, 0, B)
+            pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
+            return (source_clip, mode, split_index, edge_frames, mask_ph(), kp_out, pipe)
 
         raise ValueError(f"Unknown mode: {mode}")
 

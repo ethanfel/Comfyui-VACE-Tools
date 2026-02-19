@@ -38,11 +38,9 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 | `mode` | STRING | Selected mode — wire to mask generator's mode (convert widget to input). |
 | `split_index` | INT | Adjusted for the trimmed clip — wire to mask generator. |
 | `edge_frames` | INT | Adjusted/passed through — wire to mask generator. |
-| `segment_1`–`segment_4` | IMAGE | Frame segments per mode (same meaning as mask generator segments). Unused segments are 1-frame black placeholders. |
 | `inpaint_mask` | MASK | Trimmed to match output, or placeholder. |
 | `keyframe_positions` | STRING | Pass-through. |
-| `trim_start` | INT | Start index of the trimmed region in the original clip — wire to VACE Merge Back. |
-| `trim_end` | INT | End index of the trimmed region in the original clip — wire to VACE Merge Back. |
+| `vace_pipe` | VACE_PIPE | Pipe carrying mode, trim bounds, and context frame counts — wire to VACE Merge Back. |
 
 ### Per-Mode Trimming
 
@@ -318,7 +316,7 @@ control_frames: [ k0][ GREY ][ k1][ GREY ][ k2][ GREY ][ k3]
 
 ## Node: VACE Merge Back
 
-Splices VACE sampler output back into the original full-length video. Connect the original (untrimmed) clip, the VACE sampler output, the mask from VACE Mask Generator, and the `mode`/`trim_start`/`trim_end` from VACE Source Prep.
+Splices VACE sampler output back into the original full-length video. Connect the original (untrimmed) clip, the VACE sampler output, and the `vace_pipe` from VACE Source Prep. The pipe carries mode, trim bounds, and context frame counts for automatic blending.
 
 Irrelevant widgets are automatically hidden based on the selected blend method.
 
@@ -328,11 +326,7 @@ Irrelevant widgets are automatically hidden based on the selected blend method.
 |---|---|---|---|
 | `original_clip` | IMAGE | — | Full original video (before any trimming). |
 | `vace_output` | IMAGE | — | VACE sampler output. |
-| `mask` | IMAGE | — | Mask from VACE Mask Generator — BLACK=context, WHITE=generated. |
-| `mode` | STRING | *(wired)* | Mode from VACE Source Prep (must be wired, not typed). |
-| `trim_start` | INT | *(wired)* | Start of trimmed region in original (from VACE Source Prep). |
-| `trim_end` | INT | *(wired)* | End of trimmed region in original (from VACE Source Prep). |
-| `blend_frames` | INT | `4` | Context frames to blend at each seam (0 = hard cut). |
+| `vace_pipe` | VACE_PIPE | — | Pipe from VACE Source Prep carrying mode, trim bounds, and context counts. |
 | `blend_method` | ENUM | `optical_flow` | `none` (hard cut), `alpha` (linear crossfade), or `optical_flow` (motion-compensated). |
 | `of_preset` | ENUM | `balanced` | Optical flow quality: `fast`, `balanced`, `quality`, `max`. |
 
@@ -346,23 +340,23 @@ Irrelevant widgets are automatically hidden based on the selected blend method.
 
 **Pass-through modes** (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint): returns `vace_output` as-is — the VACE output IS the final result for these modes.
 
-**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `original[:trim_start] + vace_output + original[trim_end:]`, then blends at the seams where context frames meet original frames.
+**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `original[:trim_start] + vace_output + original[trim_end:]`, then blends across the full context zones at each seam.
 
-The node detects context zones by counting consecutive black frames at the start and end of the mask. At each seam, `blend_frames` frames are blended with a smooth alpha ramp. Optical flow blending warps both frames along the motion field before blending, reducing ghosting on moving subjects.
+Context frame counts (`left_ctx`, `right_ctx`) are carried in the `vace_pipe` and determined automatically by VACE Source Prep based on the mode and input_left/input_right settings. Blending uses a smooth alpha ramp across the entire context zone. Optical flow blending warps both frames along the motion field before blending, reducing ghosting on moving subjects.
 
 ### Example: Middle Extend
 
 ```
 Original:  274 frames (0–273)
 Prep:      split_index=137, input_left=16, input_right=16
-           → trim_start=121, trim_end=153, trimmed=32 frames
+           → vace_pipe: trim_start=121, trim_end=153, left_ctx=16, right_ctx=16
 Mask Gen:  target_frames=81
            → mask = [BLACK×16] [WHITE×49] [BLACK×16]
 VACE out:  81 frames (from sampler)
 Merge:     result = original[0:121] + vace[0:81] + original[153:274]
            → 121 + 81 + 121 = 323 frames
-           Left blend:  vace[0..3] ↔ original[121..124]
-           Right blend: vace[77..80] ↔ original[149..152]
+           Left blend:  vace[0..15] ↔ original[121..136] (full 16-frame context zone)
+           Right blend: vace[65..80] ↔ original[137..152] (full 16-frame context zone)
 ```
 
 ### Wiring Diagram
@@ -370,14 +364,12 @@ Merge:     result = original[0:121] + vace[0:81] + original[153:274]
 ```
 [Load Video]
      │
-     ├─ source_clip ──→ [VACESourcePrep] ─┬─ source_clip ──→ [MaskGen] ─→ mask ──┐
-     │                                     ├─ mode ───────────────────────────────┤
-     │                                     ├─ trim_start ─────────────────────────┤
-     │                                     └─ trim_end ──────────────────────────┤
-     │                                                                            │
-     └─ original_clip ───────────────────────────────────────────────────────────→ [VACEMergeBack]
-                                                                                  │
-                                        [Sampler] ─→ vace_output ────────────────┘
+     ├─ source_clip ──→ [VACESourcePrep] ─┬─ source_clip ──→ [MaskGen] ─→ [Sampler]
+     │                                     ├─ mode ──────────→ [MaskGen]       │
+     │                                     └─ vace_pipe ─────────────────┐     │
+     │                                                                   │     │
+     └─ original_clip ──────────────────────────────────────→ [VACEMergeBack] ←┘
+                                                                  vace_output
 ```
 
 ---
