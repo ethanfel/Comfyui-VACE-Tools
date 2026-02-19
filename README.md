@@ -282,6 +282,49 @@ Saves a WanVideo diffusion model (with merged LoRAs) as a `.safetensors` file. F
 - Clones all tensors before saving to handle shared/aliased weights safely.
 - Automatically avoids overwriting existing files by appending `_1`, `_2`, etc.
 
+---
+
+## Node: Save Latent (Absolute Path)
+
+Saves a LATENT to an absolute file path as `.latent` (safetensors format). Found under the **latent** category.
+
+### Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `samples` | LATENT | — | Latent samples to save. |
+| `path` | STRING | `/path/to/latent.latent` | Absolute file path. `.latent` extension is appended if missing. |
+| `overwrite` | BOOLEAN | `False` | If false, appends `_1`, `_2`, etc. to avoid overwriting. |
+
+### Outputs
+
+| Output | Description |
+|---|---|
+| `LATENT` | Pass-through of the input samples (for chaining). |
+
+### Behavior
+
+- Saves all tensor data via safetensors, with device info and non-tensor metadata stored in the file header.
+- Creates parent directories automatically.
+
+---
+
+## Node: Load Latent (Absolute Path)
+
+Loads a LATENT from an absolute file path. Found under the **latent** category.
+
+### Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `path` | STRING | `/path/to/latent.latent` | Absolute path to a `.latent` file previously saved by Save Latent. |
+
+### Outputs
+
+| Output | Description |
+|---|---|
+| `LATENT` | Restored latent samples with original devices and non-tensor data. |
+
 ## Dependencies
 
 PyTorch and safetensors, both bundled with ComfyUI.
