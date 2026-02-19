@@ -1,6 +1,6 @@
 # ComfyUI-VACE-Tools
 
-A single ComfyUI node that replaces ~149 manually wired nodes for generating VACE mask and control-frame sequences.
+ComfyUI custom nodes for WanVideo/VACE workflows — mask/control-frame generation and model saving.
 
 ## Installation
 
@@ -9,7 +9,7 @@ cd ComfyUI/custom_nodes/
 git clone https://github.com/ethanfel/Comfyui-VACE-Tools.git
 ```
 
-Restart ComfyUI. The node appears under the **VACE Tools** category.
+Restart ComfyUI. Nodes appear under the **VACE Tools** and **WanVideoWrapper** categories.
 
 ## Node: VACE Mask Generator
 
@@ -260,6 +260,28 @@ control_frames: [ k0][ GREY ][ k1][ GREY ][ k2][ GREY ][ k3]
 | `segment_1` | Full source clip (keyframe images) |
 | `segment_2`–`4` | Placeholder |
 
+---
+
+## Node: WanVideo Save Merged Model
+
+Saves a WanVideo diffusion model (with merged LoRAs) as a `.safetensors` file. Found under the **WanVideoWrapper** category.
+
+### Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `model` | WANVIDEOMODEL | — | WanVideo model with merged LoRA from the WanVideo Model Loader. |
+| `filename_prefix` | STRING | `merged_wanvideo` | Filename prefix for the saved file. A numeric suffix is appended to avoid overwriting. |
+| `save_dtype` | ENUM | `same` | Cast weights before saving: `same`, `bf16`, `fp16`, or `fp32`. Set explicitly if the model was loaded in fp8. |
+| `custom_path` | STRING | *(optional)* | Absolute path to save directory. Leave empty to save in `ComfyUI/models/diffusion_models/`. |
+
+### Behavior
+
+- Extracts the diffusion model state dict and saves it in safetensors format.
+- Records source model name and merged LoRA details (names + strengths) in file metadata for traceability.
+- Clones all tensors before saving to handle shared/aliased weights safely.
+- Automatically avoids overwriting existing files by appending `_1`, `_2`, etc.
+
 ## Dependencies
 
-None beyond PyTorch, which is bundled with ComfyUI.
+PyTorch and safetensors, both bundled with ComfyUI.
