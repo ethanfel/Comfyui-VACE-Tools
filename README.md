@@ -27,6 +27,7 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 | `input_left` | INT | `0` | Frames from the left side of the split point to keep (0 = all available). End: trailing context. Middle: frames before split. Edge/Join: start edge size. Bidirectional: trailing context. Replace: context before region. |
 | `input_right` | INT | `0` | Frames from the right side of the split point to keep (0 = all available). Pre: leading reference. Middle: frames after split. Edge/Join: end edge size. Replace: context after region. |
 | `edge_frames` | INT | `8` | Default edge size for Edge/Join modes (overridden by input_left/input_right if non-zero). Replace/Inpaint: number of frames to replace. |
+| `source_clip_2` | IMAGE | *(optional)* | Second clip for Join Extend — join two separate clips instead of splitting one in half. |
 | `inpaint_mask` | MASK | *(optional)* | Spatial inpaint mask — trimmed to match output frames for Video Inpaint mode. |
 | `keyframe_positions` | STRING | *(optional)* | Keyframe positions pass-through for Keyframe mode. |
 
@@ -35,7 +36,7 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 | Output | Type | Description |
 |---|---|---|
 | `source_clip` | IMAGE | Trimmed frames — wire to mask generator's source_clip. |
-| `mode` | STRING | Selected mode — wire to mask generator's mode (convert widget to input). |
+| `mode` | ENUM | Selected mode — wire to mask generator's mode. |
 | `split_index` | INT | Adjusted for the trimmed clip — wire to mask generator. |
 | `edge_frames` | INT | Adjusted/passed through — wire to mask generator. |
 | `inpaint_mask` | MASK | Trimmed to match output, or placeholder. |
@@ -50,7 +51,7 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 | Pre Extend | — | Leading reference frames | Keeps first N frames |
 | Middle Extend | Frames before split | Frames after split | Window around split_index |
 | Edge Extend | Start edge size | End edge size | Overrides edge_frames; forced symmetric (min of both) |
-| Join Extend | Edge from first half | Edge from second half | Edge context around midpoint; forced symmetric |
+| Join Extend | Edge from first half/clip | Edge from second half/clip | Edge context around midpoint (or between two clips if source_clip_2 connected); forced symmetric |
 | Bidirectional | Trailing context frames | — | Keeps last N frames |
 | Frame Interpolation | — | — | Pass-through (no trimming) |
 | Replace/Inpaint | Context before region | Context after region | Window around replace region |
@@ -152,15 +153,18 @@ control_frames: [ end_seg         ][ GREY  × generated ][ start_seg         ]
 
 ### Join Extend
 
-Heal/blend **two halves** of a clip together. The source is split in half; `edge_frames` from each side of the split form the context.
+Heal/blend **two halves** of a clip (or two separate clips) together. By default, the source is split in half; `edge_frames` from each side of the split form the context. If `source_clip_2` is connected (via VACE Source Prep), the two clips are joined directly instead.
 
-- **`edge_frames`** — context frames taken from each side of the midpoint.
+- **`edge_frames`** — context frames taken from each side of the join point.
 - **`split_index`** — unused.
 - **`frames_to_generate`** = `target_frames − (2 × edge_frames)`
 
 ```
-source layout:  [ part_1 ][ part_2 | part_3 ][ part_4 ]
+Single clip:    [ part_1 ][ part_2 | part_3 ][ part_4 ]
                            ← edge →  ← edge →
+
+Two clips:      clip_1: [...| part_2 ]   clip_2: [ part_3 |...]
+                         ← edge →                 ← edge →
 
 mask:           [ BLACK × part_2 ][ WHITE × generated ][ BLACK × part_3 ]
 control_frames: [ part_2         ][ GREY  × generated ][ part_3         ]
@@ -271,6 +275,7 @@ Irrelevant widgets are automatically hidden based on the selected blend method.
 | `vace_pipe` | VACE_PIPE | — | Pipe from VACE Source Prep carrying mode, trim bounds, and context counts. |
 | `blend_method` | ENUM | `optical_flow` | `none` (hard cut), `alpha` (linear crossfade), or `optical_flow` (motion-compensated). |
 | `of_preset` | ENUM | `balanced` | Optical flow quality: `fast`, `balanced`, `quality`, `max`. |
+| `original_clip_2` | IMAGE | *(optional)* | Second original clip for Join Extend with two separate clips. |
 
 ### Outputs
 
@@ -282,7 +287,7 @@ Irrelevant widgets are automatically hidden based on the selected blend method.
 
 **Pass-through modes** (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint): returns `vace_output` as-is — the VACE output IS the final result for these modes.
 
-**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `original[:trim_start] + vace_output + original[trim_end:]`, then blends across the full context zones at each seam.
+**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `original[:trim_start] + vace_output + original[trim_end:]`, then blends across the full context zones at each seam. For two-clip Join Extend, the tail comes from `original_clip_2` instead.
 
 Context frame counts (`left_ctx`, `right_ctx`) are carried in the `vace_pipe` and determined automatically by VACE Source Prep based on the mode and input_left/input_right settings. Blending uses a smooth alpha ramp across the entire context zone. Optical flow blending warps both frames along the motion field before blending, reducing ghosting on moving subjects.
 

@@ -90,6 +90,7 @@ Pass-through modes (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint):
 Splice modes (End, Pre, Middle, Join, Bidirectional, Replace):
   Reconstructs original[:trim_start] + vace_output + original[trim_end:]
   with automatic blending across the full context zones.
+  For two-clip Join Extend, connect original_clip_2 — the tail comes from the second clip.
 
 Blend methods:
   none          — Hard cut at seams (fastest)
