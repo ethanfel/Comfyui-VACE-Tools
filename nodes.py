@@ -323,7 +323,7 @@ input_left / input_right (0 = use all available):
   Pre Extend:          input_right = leading reference frames to keep
   Middle Extend:       input_left/input_right = frames each side of split
   Edge Extend:         input_left/input_right = start/end edge size (overrides edge_frames)
-  Join Extend:         input_left/input_right = edge context from each half
+  Join Extend:         input_left/input_right = edge context from each half (or each clip if source_clip_2 connected)
   Bidirectional:       input_left = trailing context frames to keep
   Frame Interpolation: pass-through (no trimming)
   Replace/Inpaint:     input_left/input_right = context frames around replace region
@@ -385,6 +385,12 @@ input_left / input_right (0 = use all available):
                 ),
             },
             "optional": {
+                "source_clip_2": (
+                    "IMAGE",
+                    {
+                        "description": "Second clip for Join Extend — join two separate clips instead of splitting one in half.",
+                    },
+                ),
                 "inpaint_mask": (
                     "MASK",
                     {
@@ -401,7 +407,7 @@ input_left / input_right (0 = use all available):
             },
         }
 
-    def prepare(self, source_clip, mode, split_index, input_left, input_right, edge_frames, inpaint_mask=None, keyframe_positions=None):
+    def prepare(self, source_clip, mode, split_index, input_left, input_right, edge_frames, source_clip_2=None, inpaint_mask=None, keyframe_positions=None):
         B, H, W, C = source_clip.shape
         dev = source_clip.device
 
@@ -464,9 +470,13 @@ input_left / input_right (0 = use all available):
             return (output, mode, 0, sym, mask_ph(), kp_out, pipe)
 
         elif mode == "Join Extend":
-            half = B // 2
-            first_half = source_clip[:half]
-            second_half = source_clip[half:]
+            if source_clip_2 is not None:
+                first_half = source_clip
+                second_half = source_clip_2
+            else:
+                half = B // 2
+                first_half = source_clip[:half]
+                second_half = source_clip[half:]
             eff_left = input_left if input_left > 0 else edge_frames
             eff_right = input_right if input_right > 0 else edge_frames
             eff_left = min(eff_left, first_half.shape[0])
@@ -475,7 +485,14 @@ input_left / input_right (0 = use all available):
             part_2 = first_half[-sym:]
             part_3 = second_half[:sym]
             output = torch.cat([part_2, part_3], dim=0)
-            pipe = {"mode": mode, "trim_start": half - sym, "trim_end": half + sym, "left_ctx": sym, "right_ctx": sym}
+            two_clip = source_clip_2 is not None
+            if two_clip:
+                trim_start = first_half.shape[0] - sym
+                trim_end = sym
+            else:
+                trim_start = half - sym
+                trim_end = half + sym
+            pipe = {"mode": mode, "trim_start": trim_start, "trim_end": trim_end, "left_ctx": sym, "right_ctx": sym, "two_clip": two_clip}
             return (output, mode, 0, sym, mask_ph(), kp_out, pipe)
 
         elif mode == "Bidirectional Extend":

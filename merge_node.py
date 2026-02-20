@@ -106,9 +106,12 @@ Blend methods:
                 "blend_method": (["optical_flow", "alpha", "none"], {"default": "optical_flow", "description": "Blending method at seams."}),
                 "of_preset": (["fast", "balanced", "quality", "max"], {"default": "balanced", "description": "Optical flow quality preset."}),
             },
+            "optional": {
+                "original_clip_2": ("IMAGE", {"description": "Second original clip for Join Extend with two separate clips."}),
+            },
         }
 
-    def merge(self, original_clip, vace_output, vace_pipe, blend_method, of_preset):
+    def merge(self, original_clip, vace_output, vace_pipe, blend_method, of_preset, original_clip_2=None):
         mode = vace_pipe["mode"]
         trim_start = vace_pipe["trim_start"]
         trim_end = vace_pipe["trim_end"]
@@ -120,9 +123,15 @@ Blend methods:
             return (vace_output,)
 
         # Splice modes: reconstruct full video
+        two_clip = vace_pipe.get("two_clip", False)
         V = vace_output.shape[0]
         head = original_clip[:trim_start]
-        tail = original_clip[trim_end:]
+        if two_clip and original_clip_2 is not None:
+            tail = original_clip_2[trim_end:]
+            right_orig = original_clip_2
+        else:
+            tail = original_clip[trim_end:]
+            right_orig = original_clip
         result = torch.cat([head, vace_output, tail], dim=0)
 
         if blend_method == "none" or (left_ctx == 0 and right_ctx == 0):
@@ -142,7 +151,7 @@ Blend methods:
         for j in range(right_ctx):
             alpha = 1.0 - (j + 1) / (right_ctx + 1)
             frame_idx = V - right_ctx + j
-            result[trim_start + frame_idx] = blend_frame(original_clip[trim_end - right_ctx + j], vace_output[frame_idx], alpha)
+            result[trim_start + frame_idx] = blend_frame(right_orig[trim_end - right_ctx + j], vace_output[frame_idx], alpha)
 
         return (result,)
 
