@@ -145,11 +145,15 @@ Blend methods:
 
         # Blend across full left context zone
         for j in range(left_ctx):
+            if trim_start + j >= source_clip.shape[0]:
+                break
             alpha = (j + 1) / (left_ctx + 1)
             result[trim_start + j] = blend_frame(source_clip[trim_start + j], vace_output[j], alpha)
 
         # Blend across full right context zone
         for j in range(right_ctx):
+            if trim_end - right_ctx + j >= right_orig.shape[0]:
+                break
             alpha = 1.0 - (j + 1) / (right_ctx + 1)
             frame_idx = V - right_ctx + j
             result[trim_start + frame_idx] = blend_frame(right_orig[trim_end - right_ctx + j], vace_output[frame_idx], alpha)

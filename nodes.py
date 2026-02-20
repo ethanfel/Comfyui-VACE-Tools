@@ -86,7 +86,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                         "default": 0,
                         "min": -10000,
                         "max": 10000,
-                        "description": "Where to split the source. End: trim from end (e.g. -16). Pre: reference frames from start (e.g. 24). Middle: split frame index. Unused by Edge/Join. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by Video Inpaint and Keyframe.",
+                        "description": "Where to split the source. Middle: split frame index (0 = auto-middle). Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by End/Pre/Edge/Join/Video Inpaint/Keyframe.",
                     },
                 ),
                 "edge_frames": (
@@ -152,6 +152,13 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             return (control_frames, mask, frames_to_generate)
 
         elif mode == "Middle Extend":
+            if split_index <= 0:
+                split_index = B // 2
+            if split_index >= B:
+                raise ValueError(
+                    f"Middle Extend: split_index ({split_index}) is out of range — "
+                    f"source_clip only has {B} frames. Use 0 for auto-middle."
+                )
             image_a = source_clip[:split_index]
             image_b = source_clip[split_index:]
             a_count = image_a.shape[0]
@@ -211,6 +218,11 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             return (control_frames, mask, frames_to_generate)
 
         elif mode == "Replace/Inpaint":
+            if split_index >= B:
+                raise ValueError(
+                    f"Replace/Inpaint: split_index ({split_index}) is out of range — "
+                    f"source_clip only has {B} frames."
+                )
             start = max(0, min(split_index, B))
             length = max(0, min(edge_frames, B - start))
             end = start + length
@@ -348,7 +360,7 @@ input_left / input_right (0 = use all available):
                         "default": 0,
                         "min": -10000,
                         "max": 10000,
-                        "description": "Split position in the full source video. Same meaning as mask generator's split_index.",
+                        "description": "Split position in the full source video (0 = auto-middle for Middle Extend). Same meaning as mask generator's split_index.",
                     },
                 ),
                 "input_left": (
@@ -450,6 +462,13 @@ input_left / input_right (0 = use all available):
             return (output, mode, output.shape[0], edge_frames, trim_mask(0, end), kp_out, pipe)
 
         elif mode == "Middle Extend":
+            if split_index <= 0:
+                split_index = B // 2
+            if split_index >= B:
+                raise ValueError(
+                    f"Middle Extend: split_index ({split_index}) is out of range — "
+                    f"source_clip only has {B} frames. Use 0 for auto-middle."
+                )
             left_start = max(0, split_index - input_left) if input_left > 0 else 0
             right_end = min(B, split_index + input_right) if input_right > 0 else B
             output = source_clip[left_start:right_end]
@@ -510,6 +529,11 @@ input_left / input_right (0 = use all available):
             return (source_clip, mode, split_index, edge_frames, trim_mask(0, B), kp_out, pipe)
 
         elif mode == "Replace/Inpaint":
+            if split_index >= B:
+                raise ValueError(
+                    f"Replace/Inpaint: split_index ({split_index}) is out of range — "
+                    f"source_clip only has {B} frames."
+                )
             start = max(0, min(split_index, B))
             end_idx = min(start + edge_frames, B)
             length = end_idx - start
