@@ -300,7 +300,7 @@ class VACESourcePrep:
     FUNCTION = "prepare"
     RETURN_TYPES = ("IMAGE", VACE_MODES, "INT", "INT", "MASK", "STRING", "VACE_PIPE")
     RETURN_NAMES = (
-        "source_clip", "mode", "split_index", "edge_frames",
+        "trimmed_clip", "mode", "split_index", "edge_frames",
         "inpaint_mask", "keyframe_positions", "vace_pipe",
     )
     OUTPUT_TOOLTIPS = (

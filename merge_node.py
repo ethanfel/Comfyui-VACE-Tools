@@ -90,7 +90,7 @@ Pass-through modes (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint):
 Splice modes (End, Pre, Middle, Join, Bidirectional, Replace):
   Reconstructs original[:trim_start] + vace_output + original[trim_end:]
   with automatic blending across the full context zones.
-  For two-clip Join Extend, connect original_clip_2 — the tail comes from the second clip.
+  For two-clip Join Extend, connect source_clip_2 — the tail comes from the second clip.
 
 Blend methods:
   none          — Hard cut at seams (fastest)
@@ -101,18 +101,18 @@ Blend methods:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "original_clip": ("IMAGE", {"description": "Full original video (before any trimming)."}),
+                "source_clip": ("IMAGE", {"description": "Full original video (before any trimming)."}),
                 "vace_output": ("IMAGE", {"description": "VACE sampler output."}),
                 "vace_pipe": ("VACE_PIPE", {"description": "Pipe from VACE Source Prep carrying mode, trim bounds, and context counts."}),
                 "blend_method": (["optical_flow", "alpha", "none"], {"default": "optical_flow", "description": "Blending method at seams."}),
                 "of_preset": (["fast", "balanced", "quality", "max"], {"default": "balanced", "description": "Optical flow quality preset."}),
             },
             "optional": {
-                "original_clip_2": ("IMAGE", {"description": "Second original clip for Join Extend with two separate clips."}),
+                "source_clip_2": ("IMAGE", {"description": "Second original clip for Join Extend with two separate clips."}),
             },
         }
 
-    def merge(self, original_clip, vace_output, vace_pipe, blend_method, of_preset, original_clip_2=None):
+    def merge(self, source_clip, vace_output, vace_pipe, blend_method, of_preset, source_clip_2=None):
         mode = vace_pipe["mode"]
         trim_start = vace_pipe["trim_start"]
         trim_end = vace_pipe["trim_end"]
@@ -126,13 +126,13 @@ Blend methods:
         # Splice modes: reconstruct full video
         two_clip = vace_pipe.get("two_clip", False)
         V = vace_output.shape[0]
-        head = original_clip[:trim_start]
-        if two_clip and original_clip_2 is not None:
-            tail = original_clip_2[trim_end:]
-            right_orig = original_clip_2
+        head = source_clip[:trim_start]
+        if two_clip and source_clip_2 is not None:
+            tail = source_clip_2[trim_end:]
+            right_orig = source_clip_2
         else:
-            tail = original_clip[trim_end:]
-            right_orig = original_clip
+            tail = source_clip[trim_end:]
+            right_orig = source_clip
         result = torch.cat([head, vace_output, tail], dim=0)
 
         if blend_method == "none" or (left_ctx == 0 and right_ctx == 0):
@@ -146,7 +146,7 @@ Blend methods:
         # Blend across full left context zone
         for j in range(left_ctx):
             alpha = (j + 1) / (left_ctx + 1)
-            result[trim_start + j] = blend_frame(original_clip[trim_start + j], vace_output[j], alpha)
+            result[trim_start + j] = blend_frame(source_clip[trim_start + j], vace_output[j], alpha)
 
         # Blend across full right context zone
         for j in range(right_ctx):

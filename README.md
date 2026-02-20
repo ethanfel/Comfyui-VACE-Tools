@@ -35,7 +35,7 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 
 | Output | Type | Description |
 |---|---|---|
-| `source_clip` | IMAGE | Trimmed frames — wire to mask generator's source_clip. |
+| `trimmed_clip` | IMAGE | Trimmed frames — wire to mask generator's source_clip. |
 | `mode` | ENUM | Selected mode — wire to mask generator's mode. |
 | `split_index` | INT | Adjusted for the trimmed clip — wire to mask generator. |
 | `edge_frames` | INT | Adjusted/passed through — wire to mask generator. |
@@ -270,12 +270,12 @@ Irrelevant widgets are automatically hidden based on the selected blend method.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `original_clip` | IMAGE | — | Full original video (before any trimming). |
+| `source_clip` | IMAGE | — | Full original video (before any trimming). Same source as VACE Source Prep's source_clip. |
 | `vace_output` | IMAGE | — | VACE sampler output. |
 | `vace_pipe` | VACE_PIPE | — | Pipe from VACE Source Prep carrying mode, trim bounds, and context counts. |
 | `blend_method` | ENUM | `optical_flow` | `none` (hard cut), `alpha` (linear crossfade), or `optical_flow` (motion-compensated). |
 | `of_preset` | ENUM | `balanced` | Optical flow quality: `fast`, `balanced`, `quality`, `max`. |
-| `original_clip_2` | IMAGE | *(optional)* | Second original clip for Join Extend with two separate clips. |
+| `source_clip_2` | IMAGE | *(optional)* | Second original clip for Join Extend with two separate clips. |
 
 ### Outputs
 
@@ -287,7 +287,7 @@ Irrelevant widgets are automatically hidden based on the selected blend method.
 
 **Pass-through modes** (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint): returns `vace_output` as-is — the VACE output IS the final result for these modes.
 
-**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `original[:trim_start] + vace_output + original[trim_end:]`, then blends across the full context zones at each seam. For two-clip Join Extend, the tail comes from `original_clip_2` instead.
+**Splice modes** (End, Pre, Middle, Join, Bidirectional, Replace): reconstructs `source_clip[:trim_start] + vace_output + source_clip[trim_end:]`, then blends across the full context zones at each seam. For two-clip Join Extend, the tail comes from `source_clip_2` instead.
 
 Context frame counts (`left_ctx`, `right_ctx`) are carried in the `vace_pipe` and determined automatically by VACE Source Prep based on the mode and input_left/input_right settings. Blending uses a smooth alpha ramp across the entire context zone. Optical flow blending warps both frames along the motion field before blending, reducing ghosting on moving subjects.
 
@@ -311,11 +311,11 @@ Merge:     result = original[0:121] + vace[0:81] + original[153:274]
 ```
 [Load Video]
      │
-     ├─ source_clip ──→ [VACESourcePrep] ─┬─ source_clip ──→ [MaskGen] ─→ [Sampler]
-     │                                     ├─ mode ──────────→ [MaskGen]       │
-     │                                     └─ vace_pipe ─────────────────┐     │
-     │                                                                   │     │
-     └─ original_clip ──────────────────────────────────────→ [VACEMergeBack] ←┘
+     ├─ source_clip ──→ [VACESourcePrep] ─┬─ trimmed_clip ──→ [MaskGen] ─→ [Sampler]
+     │                                     ├─ mode ───────────→ [MaskGen]       │
+     │                                     └─ vace_pipe ──────────────────┐     │
+     │                                                                    │     │
+     └─ source_clip ───────────────────────────────────────→ [VACEMergeBack] ←┘
                                                                   vace_output
 ```
 
