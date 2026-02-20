@@ -26,11 +26,11 @@ class VACEMaskGenerator:
     CATEGORY = "VACE Tools"
     FUNCTION = "generate"
     RETURN_TYPES = ("IMAGE", "IMAGE", "INT")
-    RETURN_NAMES = ("control_frames", "mask", "frames_to_generate")
+    RETURN_NAMES = ("control_frames", "mask", "target_frames")
     OUTPUT_TOOLTIPS = (
         "Visual reference for VACE — source pixels where mask is black, grey (#7f7f7f) fill where mask is white.",
         "Mask sequence — black (0) = keep original, white (1) = generate. Per-frame for most modes; per-pixel for Video Inpaint.",
-        "Number of new frames to generate (white/grey frames added).",
+        "Total frame count of the output sequence — wire directly to VACE encode.",
     )
     DESCRIPTION = """VACE Mask Generator — builds mask + control_frames sequences for all VACE generation modes.
 
@@ -141,7 +141,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             frames_to_generate = target_frames - B
             mask = torch.cat([solid(B, BLACK), solid(frames_to_generate, WHITE)], dim=0)
             control_frames = torch.cat([source_clip, solid(frames_to_generate, GREY)], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         elif mode == "Pre Extend":
             image_a = source_clip[:split_index]
@@ -149,7 +149,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             frames_to_generate = target_frames - a_count
             mask = torch.cat([solid(frames_to_generate, WHITE), solid(a_count, BLACK)], dim=0)
             control_frames = torch.cat([solid(frames_to_generate, GREY), image_a], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         elif mode == "Middle Extend":
             if split_index <= 0:
@@ -166,7 +166,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             frames_to_generate = target_frames - (a_count + b_count)
             mask = torch.cat([solid(a_count, BLACK), solid(frames_to_generate, WHITE), solid(b_count, BLACK)], dim=0)
             control_frames = torch.cat([image_a, solid(frames_to_generate, GREY), image_b], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         elif mode == "Edge Extend":
             start_seg = source_clip[:edge_frames]
@@ -176,7 +176,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             frames_to_generate = target_frames - (start_count + end_count)
             mask = torch.cat([solid(end_count, BLACK), solid(frames_to_generate, WHITE), solid(start_count, BLACK)], dim=0)
             control_frames = torch.cat([end_seg, solid(frames_to_generate, GREY), start_seg], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         elif mode == "Join Extend":
             half = B // 2
@@ -189,7 +189,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             frames_to_generate = target_frames - (p2_count + p3_count)
             mask = torch.cat([solid(p2_count, BLACK), solid(frames_to_generate, WHITE), solid(p3_count, BLACK)], dim=0)
             control_frames = torch.cat([part_2, solid(frames_to_generate, GREY), part_3], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         elif mode == "Bidirectional Extend":
             frames_to_generate = max(0, target_frames - B)
@@ -200,7 +200,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             post_count = frames_to_generate - pre_count
             mask = torch.cat([solid(pre_count, WHITE), solid(B, BLACK), solid(post_count, WHITE)], dim=0)
             control_frames = torch.cat([solid(pre_count, GREY), source_clip, solid(post_count, GREY)], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         elif mode == "Frame Interpolation":
             step = max(split_index, 1)
@@ -215,7 +215,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                     ctrl_parts.append(solid(step, GREY))
             mask = torch.cat(mask_parts, dim=0)
             control_frames = torch.cat(ctrl_parts, dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, B + frames_to_generate)
 
         elif mode == "Replace/Inpaint":
             if split_index >= B:
@@ -231,7 +231,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             after = source_clip[end:]
             mask = torch.cat([solid(before.shape[0], BLACK), solid(length, WHITE), solid(after.shape[0], BLACK)], dim=0)
             control_frames = torch.cat([before, solid(length, GREY), after], dim=0)
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, B)
 
         elif mode == "Video Inpaint":
             if inpaint_mask is None:
@@ -254,8 +254,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             mask = m3
             grey = torch.full_like(source_clip, GREY)
             control_frames = source_clip * (1.0 - m3) + grey * m3
-            frames_to_generate = B
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, B)
 
         elif mode == "Keyframe":
             if B > target_frames:
@@ -301,8 +300,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
 
             mask = torch.cat(mask_parts, dim=0)
             control_frames = torch.cat(ctrl_parts, dim=0)
-            frames_to_generate = target_frames - B
-            return (control_frames, mask, frames_to_generate)
+            return (control_frames, mask, target_frames)
 
         raise ValueError(f"Unknown mode: {mode}")
 
