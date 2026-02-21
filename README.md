@@ -23,7 +23,7 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 |---|---|---|---|
 | `source_clip` | IMAGE | — | Full source video frames (B, H, W, C tensor). |
 | `mode` | ENUM | `End Extend` | Generation mode — must match the mask generator's mode. |
-| `split_index` | INT | `0` | Split position in the full source video. Same meaning as the mask generator's split_index. |
+| `split_index` | INT | `0` | Split position in the full source video (0 = auto-middle for Middle Extend). Same meaning as the mask generator's split_index. |
 | `input_left` | INT | `0` | Frames from the left side of the split point to keep (0 = all available). End: trailing context. Middle: frames before split. Edge/Join: start edge size. Bidirectional: trailing context. Replace: context before region. |
 | `input_right` | INT | `0` | Frames from the right side of the split point to keep (0 = all available). Pre: leading reference. Middle: frames after split. Edge/Join: end edge size. Replace: context after region. |
 | `edge_frames` | INT | `8` | Default edge size for Edge/Join modes (overridden by input_left/input_right if non-zero). Replace/Inpaint: number of frames to replace. |
@@ -73,7 +73,7 @@ Builds mask and control_frames sequences for all VACE generation modes. Works st
 | `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor). Must not exceed target_frames for modes that use it. |
 | `mode` | ENUM | `End Extend` | Generation mode (see below). 10 modes available. |
 | `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Used by Keyframe to set output length. Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint. |
-| `split_index` | INT | `0` | Where to split the source. Meaning varies by mode. Unused by Edge/Join/Keyframe. Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. |
+| `split_index` | INT | `0` | Where to split the source. Middle: split frame index (0 = auto-middle). Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by End/Pre/Edge/Join/Video Inpaint/Keyframe. Raises an error if out of range. |
 | `edge_frames` | INT | `8` | Number of edge frames for Edge and Join modes. Replace/Inpaint: number of frames to replace. Unused by End/Pre/Middle/Bidirectional/Frame Interpolation/Video Inpaint/Keyframe. |
 | `inpaint_mask` | MASK | *(optional)* | Spatial inpaint mask for Video Inpaint mode (B, H, W). White (1.0) = regenerate, Black (0.0) = keep. Single frame broadcasts to all source frames. |
 | `keyframe_positions` | STRING | *(optional)* | Comma-separated frame indices for Keyframe mode (e.g. `0,20,50,80`). One position per source frame, sorted ascending, within [0, target_frames-1]. Leave empty for even auto-spread. |
@@ -82,9 +82,9 @@ Builds mask and control_frames sequences for all VACE generation modes. Works st
 
 | Output | Description |
 |---|---|
-| `mask` | Black/white frame sequence (`target_frames` long). Black = keep, White = generate. |
-| `control_frames` | Source frames composited with grey (`#7f7f7f`) fill (`target_frames` long). Fed to VACE as visual reference. |
-| `frames_to_generate` | INT — number of new frames the model needs to produce (the white/grey region). |
+| `control_frames` | Source frames composited with grey (`#7f7f7f`) fill. Fed to VACE as visual reference. |
+| `mask` | Black/white frame sequence. Black = keep, White = generate. |
+| `target_frames` | INT — total frame count of the output sequence, snapped to 4n+1 (1, 5, 9, …, 81, …). Wire directly to VACE encode. |
 
 ## Mode Reference
 
@@ -97,7 +97,6 @@ All diagrams show the `mask` and `control_frames` layout left-to-right (frame 0 
 Generate new frames **after** the source clip.
 
 - **`split_index`** — optional trim: `0` keeps the full clip; a negative value (e.g. `-16`) drops that many frames from the end before extending.
-- **`frames_to_generate`** = `target_frames − source_frames`
 
 ```
 mask:           [ BLACK × source ][ WHITE × generated ]
@@ -111,7 +110,6 @@ control_frames: [ source clip    ][ GREY  × generated ]
 Generate new frames **before** a reference portion of the source clip.
 
 - **`split_index`** — how many frames from the start to keep as the reference tail (e.g. `24`).
-- **`frames_to_generate`** = `target_frames − split_index`
 
 ```
 mask:           [ WHITE × generated ][ BLACK × reference ]
@@ -124,8 +122,7 @@ control_frames: [ GREY  × generated ][ reference frames  ]
 
 Generate new frames **between** two halves of the source clip, split at `split_index`.
 
-- **`split_index`** — frame index where the source is split.
-- **`frames_to_generate`** = `target_frames − source_frames`
+- **`split_index`** — frame index where the source is split (`0` = auto-middle). Raises an error if out of range.
 
 ```
 mask:           [ BLACK × part_a ][ WHITE × generated ][ BLACK × part_b ]
@@ -140,7 +137,6 @@ Generate a transition **between the end and start** of a clip (useful for loopin
 
 - **`edge_frames`** — number of frames taken from each edge.
 - **`split_index`** — unused.
-- **`frames_to_generate`** = `target_frames − (2 × edge_frames)`
 
 The end segment is placed first, then the generated gap, then the start segment — so the model learns to connect the clip's end back to its beginning.
 
@@ -157,7 +153,6 @@ Heal/blend **two halves** of a clip (or two separate clips) together. By default
 
 - **`edge_frames`** — context frames taken from each side of the join point.
 - **`split_index`** — unused.
-- **`frames_to_generate`** = `target_frames − (2 × edge_frames)`
 
 ```
 Single clip:    [ part_1 ][ part_2 | part_3 ][ part_4 ]
@@ -178,7 +173,6 @@ Generate new frames **both before and after** the source clip.
 
 - **`split_index`** — number of generated frames to place before the clip. `0` = even split (half before, half after).
 - **`target_frames`** — total output frame count.
-- **`frames_to_generate`** = `target_frames − source_frames`
 
 ```
 mask:           [ WHITE × pre ][ BLACK × source ][ WHITE × post ]
@@ -192,8 +186,6 @@ control_frames: [ GREY  × pre ][ source clip    ][ GREY  × post ]
 Insert generated frames **between each consecutive pair** of source frames.
 
 - **`split_index`** — number of new frames to insert per gap (min 1). `target_frames` is unused.
-- **`frames_to_generate`** = `(source_frames − 1) × split_index`
-- **Total output** = `source_frames + frames_to_generate`
 
 ```
 mask:           [ B ][ W×step ][ B ][ W×step ][ B ] ...
@@ -206,10 +198,9 @@ control_frames: [ f0][ GREY   ][ f1][ GREY   ][ f2] ...
 
 Regenerate a range of frames **in-place** within the source clip.
 
-- **`split_index`** — start index of the region to replace (clamped to source length).
+- **`split_index`** — start index of the region to replace. Raises an error if out of range.
 - **`edge_frames`** — number of frames to replace (clamped to remaining frames after start).
-- **`frames_to_generate`** = `edge_frames` (after clamping). `target_frames` is unused.
-- **Total output** = `source_frames` (same length — in-place replacement).
+- `target_frames` is unused. Total output = `source_frames` (in-place replacement).
 
 ```
 mask:           [ BLACK × before ][ WHITE × replace ][ BLACK × after ]
@@ -224,8 +215,7 @@ Regenerate **spatial regions** within frames using a per-pixel mask. Unlike othe
 
 - **`inpaint_mask`** *(required)* — a `MASK` (B, H, W) where white (1.0) marks regions to regenerate and black (0.0) marks regions to keep. A single-frame mask is automatically broadcast to all source frames; a multi-frame mask must have the same frame count as `source_clip`.
 - **`target_frames`**, **`split_index`**, **`edge_frames`** — unused.
-- **`frames_to_generate`** = `source_frames` (all frames are partially regenerated).
-- **Total output** = `source_frames` (same length — in-place spatial replacement).
+- Total output = `source_frames` (same length — in-place spatial replacement).
 
 Compositing formula per pixel:
 
@@ -248,8 +238,6 @@ Place keyframe images at specific positions within a `target_frames`-length outp
 - **`target_frames`** — total output frame count.
 - **`keyframe_positions`** *(optional)* — comma-separated frame indices (e.g. `"0,20,50,80"`). Must have one value per source frame, sorted ascending, no duplicates, all within [0, target_frames-1]. Leave empty for **auto-spread** (first keyframe at frame 0, last at `target_frames-1`, others evenly distributed).
 - **`split_index`**, **`edge_frames`** — unused.
-- **`frames_to_generate`** = `target_frames − source_frames`
-- **Total output** = `target_frames`
 
 ```
 Example: 4 keyframes, target_frames=81, positions auto-spread to 0,27,53,80
