@@ -88,8 +88,6 @@ Builds mask and control_frames sequences for all VACE generation modes. Works st
 
 ## Mode Reference
 
-All diagrams show the `mask` and `control_frames` layout left-to-right (frame 0 → frame N).
-
 ---
 
 ### End Extend
@@ -98,10 +96,18 @@ Generate new frames **after** the source clip.
 
 - **`split_index`** — optional trim: `0` keeps the full clip; a negative value (e.g. `-16`) drops that many frames from the end before extending.
 
-```
-mask:           [ BLACK × source ][ WHITE × generated ]
-control_frames: [ source clip    ][ GREY  × generated ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="360" height="28" rx="4" fill="#222"/>
+  <text x="180" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × source</text>
+  <rect x="360" y="18" width="240" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="480" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × generated</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="360" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="180" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">source clip</text>
+  <rect x="360" y="68" width="240" height="28" rx="4" fill="#999"/>
+  <text x="480" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × generated</text>
+</svg>
 
 ---
 
@@ -111,10 +117,18 @@ Generate new frames **before** a reference portion of the source clip.
 
 - **`split_index`** — how many frames from the start to keep as the reference tail (e.g. `24`).
 
-```
-mask:           [ WHITE × generated ][ BLACK × reference ]
-control_frames: [ GREY  × generated ][ reference frames  ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="240" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="120" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × generated</text>
+  <rect x="240" y="18" width="360" height="28" rx="4" fill="#222"/>
+  <text x="420" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × reference</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="240" height="28" rx="4" fill="#999"/>
+  <text x="120" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × generated</text>
+  <rect x="240" y="68" width="360" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="420" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">reference frames</text>
+</svg>
 
 ---
 
@@ -124,10 +138,22 @@ Generate new frames **between** two halves of the source clip, split at `split_i
 
 - **`split_index`** — frame index where the source is split (`0` = auto-middle). Raises an error if out of range.
 
-```
-mask:           [ BLACK × part_a ][ WHITE × generated ][ BLACK × part_b ]
-control_frames: [ part_a         ][ GREY  × generated ][ part_b         ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="180" height="28" rx="4" fill="#222"/>
+  <text x="90" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × part_a</text>
+  <rect x="180" y="18" width="240" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="300" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × generated</text>
+  <rect x="420" y="18" width="180" height="28" rx="4" fill="#222"/>
+  <text x="510" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × part_b</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="180" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="90" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">part_a</text>
+  <rect x="180" y="68" width="240" height="28" rx="4" fill="#999"/>
+  <text x="300" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × generated</text>
+  <rect x="420" y="68" width="180" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="510" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">part_b</text>
+</svg>
 
 ---
 
@@ -140,10 +166,22 @@ Generate a transition **between the end and start** of a clip (useful for loopin
 
 The end segment is placed first, then the generated gap, then the start segment — so the model learns to connect the clip's end back to its beginning.
 
-```
-mask:           [ BLACK × end_seg ][ WHITE × generated ][ BLACK × start_seg ]
-control_frames: [ end_seg         ][ GREY  × generated ][ start_seg         ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="150" height="28" rx="4" fill="#222"/>
+  <text x="75" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × end_seg</text>
+  <rect x="150" y="18" width="300" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="300" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × generated</text>
+  <rect x="450" y="18" width="150" height="28" rx="4" fill="#222"/>
+  <text x="525" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × start_seg</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="150" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="75" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">end_seg</text>
+  <rect x="150" y="68" width="300" height="28" rx="4" fill="#999"/>
+  <text x="300" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × generated</text>
+  <rect x="450" y="68" width="150" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="525" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">start_seg</text>
+</svg>
 
 ---
 
@@ -154,16 +192,36 @@ Heal/blend **two halves** of a clip (or two separate clips) together. By default
 - **`edge_frames`** — context frames taken from each side of the join point.
 - **`split_index`** — unused.
 
-```
-Single clip:    [ part_1 ][ part_2 | part_3 ][ part_4 ]
-                           ← edge →  ← edge →
-
-Two clips:      clip_1: [...| part_2 ]   clip_2: [ part_3 |...]
-                         ← edge →                 ← edge →
-
-mask:           [ BLACK × part_2 ][ WHITE × generated ][ BLACK × part_3 ]
-control_frames: [ part_2         ][ GREY  × generated ][ part_3         ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 170" style="max-width:600px">
+  <!-- Single clip source layout -->
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">single clip source</text>
+  <rect x="0" y="18" width="120" height="24" rx="4" fill="#4a9ebb" opacity="0.4"/>
+  <text x="60" y="34" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">part_1</text>
+  <rect x="120" y="18" width="120" height="24" rx="4" fill="#4a9ebb"/>
+  <text x="180" y="34" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">part_2</text>
+  <rect x="240" y="18" width="120" height="24" rx="4" fill="#4a9ebb"/>
+  <text x="300" y="34" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">part_3</text>
+  <rect x="360" y="18" width="120" height="24" rx="4" fill="#4a9ebb" opacity="0.4"/>
+  <text x="420" y="34" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">part_4</text>
+  <line x1="120" y1="44" x2="240" y2="44" stroke="#666" stroke-dasharray="4"/>
+  <text x="180" y="54" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#666">← edge → ← edge →</text>
+  <!-- Mask bar -->
+  <text y="72" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="78" width="150" height="28" rx="4" fill="#222"/>
+  <text x="75" y="96" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × part_2</text>
+  <rect x="150" y="78" width="300" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="300" y="96" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × generated</text>
+  <rect x="450" y="78" width="150" height="28" rx="4" fill="#222"/>
+  <text x="525" y="96" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × part_3</text>
+  <!-- Control bar -->
+  <text y="122" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="128" width="150" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="75" y="146" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">part_2</text>
+  <rect x="150" y="128" width="300" height="28" rx="4" fill="#999"/>
+  <text x="300" y="146" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × generated</text>
+  <rect x="450" y="128" width="150" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="525" y="146" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">part_3</text>
+</svg>
 
 ---
 
@@ -174,10 +232,22 @@ Generate new frames **both before and after** the source clip.
 - **`split_index`** — number of generated frames to place before the clip. `0` = even split (half before, half after).
 - **`target_frames`** — total output frame count.
 
-```
-mask:           [ WHITE × pre ][ BLACK × source ][ WHITE × post ]
-control_frames: [ GREY  × pre ][ source clip    ][ GREY  × post ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="150" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="75" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × pre</text>
+  <rect x="150" y="18" width="300" height="28" rx="4" fill="#222"/>
+  <text x="300" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × source</text>
+  <rect x="450" y="18" width="150" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="525" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × post</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="150" height="28" rx="4" fill="#999"/>
+  <text x="75" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × pre</text>
+  <rect x="150" y="68" width="300" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="300" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">source clip</text>
+  <rect x="450" y="68" width="150" height="28" rx="4" fill="#999"/>
+  <text x="525" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × post</text>
+</svg>
 
 ---
 
@@ -187,10 +257,40 @@ Insert generated frames **between each consecutive pair** of source frames.
 
 - **`split_index`** — number of new frames to insert per gap (min 1). `target_frames` is unused.
 
-```
-mask:           [ B ][ W×step ][ B ][ W×step ][ B ] ...
-control_frames: [ f0][ GREY   ][ f1][ GREY   ][ f2] ...
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="20" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="40" y="18" width="110" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="95" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#333">W × step</text>
+  <rect x="150" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="170" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="190" y="18" width="110" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="245" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#333">W × step</text>
+  <rect x="300" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="320" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="340" y="18" width="110" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="395" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#333">W × step</text>
+  <rect x="450" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="470" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <text x="520" y="36" font-size="14" font-family="sans-serif" fill="#888">…</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="20" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f0</text>
+  <rect x="40" y="68" width="110" height="28" rx="4" fill="#999"/>
+  <text x="95" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="150" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="170" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f1</text>
+  <rect x="190" y="68" width="110" height="28" rx="4" fill="#999"/>
+  <text x="245" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="300" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="320" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f2</text>
+  <rect x="340" y="68" width="110" height="28" rx="4" fill="#999"/>
+  <text x="395" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="450" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="470" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f3</text>
+  <text x="520" y="86" font-size="14" font-family="sans-serif" fill="#888">…</text>
+</svg>
 
 ---
 
@@ -202,10 +302,22 @@ Regenerate a range of frames **in-place** within the source clip.
 - **`edge_frames`** — number of frames to replace (clamped to remaining frames after start).
 - `target_frames` is unused. Total output = `source_frames` (in-place replacement).
 
-```
-mask:           [ BLACK × before ][ WHITE × replace ][ BLACK × after ]
-control_frames: [ before frames  ][ GREY  × replace ][ after frames  ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="200" height="28" rx="4" fill="#222"/>
+  <text x="100" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × before</text>
+  <rect x="200" y="18" width="200" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="300" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × replace</text>
+  <rect x="400" y="18" width="200" height="28" rx="4" fill="#222"/>
+  <text x="500" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × after</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="200" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="100" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">before frames</text>
+  <rect x="200" y="68" width="200" height="28" rx="4" fill="#999"/>
+  <text x="300" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × replace</text>
+  <rect x="400" y="68" width="200" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="500" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">after frames</text>
+</svg>
 
 ---
 
@@ -223,10 +335,26 @@ Compositing formula per pixel:
 control_frames = source × (1 − mask) + grey × mask
 ```
 
-```
-mask:           [ per-pixel mask broadcast to (B, H, W, 3)        ]
-control_frames: [ source pixels where mask=0, grey where mask=1   ]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask (per-pixel)</text>
+  <defs>
+    <pattern id="checker" width="16" height="16" patternUnits="userSpaceOnUse">
+      <rect width="8" height="8" fill="#222"/>
+      <rect x="8" width="8" height="8" fill="#fff"/>
+      <rect y="8" width="8" height="8" fill="#fff"/>
+      <rect x="8" y="8" width="8" height="8" fill="#222"/>
+    </pattern>
+  </defs>
+  <rect x="0" y="18" width="600" height="28" rx="4" fill="url(#checker)"/>
+  <rect x="0" y="18" width="600" height="28" rx="4" fill="rgba(0,0,0,0.4)"/>
+  <text x="300" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">per-pixel mask broadcast to (B, H, W, 3)</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames (per-pixel composite)</text>
+  <rect x="0" y="68" width="300" height="28" rx="4" fill="#4a9ebb"/>
+  <rect x="300" y="68" width="300" height="28" rx="4" fill="#999"/>
+  <text x="150" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">source pixels (mask=0)</text>
+  <text x="450" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">grey pixels (mask=1)</text>
+  <text x="300" y="82" text-anchor="middle" font-size="9" font-family="sans-serif" fill="#ddd">↕ blended per-pixel</text>
+</svg>
 
 ---
 
@@ -239,12 +367,39 @@ Place keyframe images at specific positions within a `target_frames`-length outp
 - **`keyframe_positions`** *(optional)* — comma-separated frame indices (e.g. `"0,20,50,80"`). Must have one value per source frame, sorted ascending, no duplicates, all within [0, target_frames-1]. Leave empty for **auto-spread** (first keyframe at frame 0, last at `target_frames-1`, others evenly distributed).
 - **`split_index`**, **`edge_frames`** — unused.
 
-```
-Example: 4 keyframes, target_frames=81, positions auto-spread to 0,27,53,80
-
-mask:           [ B ][ W×26 ][ B ][ W×25 ][ B ][ W×26 ][ B ]
-control_frames: [ k0][ GREY ][ k1][ GREY ][ k2][ GREY ][ k3]
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 100" style="max-width:600px">
+  <text y="12" font-size="10" font-family="sans-serif" fill="#888">Example: 4 keyframes, target_frames=81, positions auto-spread to 0, 27, 53, 80</text>
+  <text y="30" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="36" width="30" height="26" rx="4" fill="#222"/>
+  <text x="15" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="30" y="36" width="150" height="26" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="105" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#333">W × 26</text>
+  <rect x="180" y="36" width="30" height="26" rx="4" fill="#222"/>
+  <text x="195" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="210" y="36" width="140" height="26" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="280" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#333">W × 25</text>
+  <rect x="350" y="36" width="30" height="26" rx="4" fill="#222"/>
+  <text x="365" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="380" y="36" width="150" height="26" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="455" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#333">W × 26</text>
+  <rect x="530" y="36" width="30" height="26" rx="4" fill="#222"/>
+  <text x="545" y="53" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">B</text>
+  <text y="78" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="84" width="30" height="26" rx="4" fill="#4a9ebb"/>
+  <text x="15" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">k0</text>
+  <rect x="30" y="84" width="150" height="26" rx="4" fill="#999"/>
+  <text x="105" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="180" y="84" width="30" height="26" rx="4" fill="#4a9ebb"/>
+  <text x="195" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">k1</text>
+  <rect x="210" y="84" width="140" height="26" rx="4" fill="#999"/>
+  <text x="280" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="350" y="84" width="30" height="26" rx="4" fill="#4a9ebb"/>
+  <text x="365" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">k2</text>
+  <rect x="380" y="84" width="150" height="26" rx="4" fill="#999"/>
+  <text x="455" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="530" y="84" width="30" height="26" rx="4" fill="#4a9ebb"/>
+  <text x="545" y="101" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#fff">k3</text>
+</svg>
 
 ---
 
@@ -296,16 +451,48 @@ Merge:     result = original[0:121] + vace[0:81] + original[153:274]
 
 ### Wiring Diagram
 
-```
-[Load Video]
-     │
-     ├─ source_clip ──→ [VACESourcePrep] ─┬─ trimmed_clip ──→ [MaskGen] ─→ [Sampler]
-     │                                     ├─ mode ───────────→ [MaskGen]       │
-     │                                     └─ vace_pipe ──────────────────┐     │
-     │                                                                    │     │
-     └─ source_clip ───────────────────────────────────────→ [VACEMergeBack] ←┘
-                                                                  vace_output
-```
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 310" style="max-width:720px">
+  <!-- Node boxes -->
+  <rect x="10" y="10" width="130" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="75" y="35" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">Load Video</text>
+  <rect x="200" y="10" width="160" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="280" y="35" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">VACE Source Prep</text>
+  <rect x="430" y="10" width="130" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="495" y="35" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">Mask Generator</text>
+  <rect x="430" y="120" width="160" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="510" y="145" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">Sampler / VACE Encode</text>
+  <rect x="280" y="240" width="160" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="360" y="265" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">VACE Merge Back</text>
+  <!-- Load Video → Source Prep (source_clip) -->
+  <line x1="140" y1="30" x2="200" y2="30" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="170" y="24" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#888">source_clip</text>
+  <!-- Source Prep → Mask Gen (trimmed_clip) -->
+  <line x1="360" y1="30" x2="430" y2="30" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="395" y="24" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#888">trimmed_clip</text>
+  <!-- Source Prep → Mask Gen (mode) -->
+  <path d="M360,40 Q400,65 430,45" stroke="#666" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="405" y="58" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#888">mode</text>
+  <!-- Mask Gen → Sampler (mask + control_frames) -->
+  <line x1="495" y1="50" x2="495" y2="120" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="520" y="85" font-size="10" font-family="sans-serif" fill="#888">mask</text>
+  <text x="520" y="97" font-size="10" font-family="sans-serif" fill="#888">control_frames</text>
+  <text x="520" y="109" font-size="10" font-family="sans-serif" fill="#888">target_frames</text>
+  <!-- Source Prep → Merge Back (vace_pipe) -->
+  <path d="M280,50 L280,260 L280,260" stroke="#666" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#arrow)"/>
+  <text x="264" y="155" font-size="10" font-family="sans-serif" fill="#888" transform="rotate(-90,264,155)">vace_pipe</text>
+  <!-- Load Video → Merge Back (source_clip) -->
+  <path d="M75,50 L75,260 L280,260" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="59" y="155" font-size="10" font-family="sans-serif" fill="#888" transform="rotate(-90,59,155)">source_clip</text>
+  <!-- Sampler → Merge Back (vace_output) -->
+  <path d="M510,160 L510,200 L440,260" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="500" y="215" font-size="10" font-family="sans-serif" fill="#888">vace_output</text>
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+    </marker>
+  </defs>
+</svg>
 
 ---
 
