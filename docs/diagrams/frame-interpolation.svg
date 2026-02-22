@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="20" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="40" y="18" width="110" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="95" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#333">W × step</text>
+  <rect x="150" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="170" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="190" y="18" width="110" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="245" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#333">W × step</text>
+  <rect x="300" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="320" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <rect x="340" y="18" width="110" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="395" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#333">W × step</text>
+  <rect x="450" y="18" width="40" height="28" rx="4" fill="#222"/>
+  <text x="470" y="36" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">B</text>
+  <text x="520" y="36" font-size="14" font-family="sans-serif" fill="#888">…</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="20" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f0</text>
+  <rect x="40" y="68" width="110" height="28" rx="4" fill="#999"/>
+  <text x="95" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="150" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="170" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f1</text>
+  <rect x="190" y="68" width="110" height="28" rx="4" fill="#999"/>
+  <text x="245" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="300" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="320" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f2</text>
+  <rect x="340" y="68" width="110" height="28" rx="4" fill="#999"/>
+  <text x="395" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">GREY</text>
+  <rect x="450" y="68" width="40" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="470" y="86" text-anchor="middle" font-size="11" font-family="sans-serif" fill="#fff">f3</text>
+  <text x="520" y="86" font-size="14" font-family="sans-serif" fill="#888">…</text>
+</svg>

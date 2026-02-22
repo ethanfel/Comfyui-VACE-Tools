@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 310" style="max-width:720px">
+  <!-- Arrow marker -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+    </marker>
+  </defs>
+  <!-- Node boxes -->
+  <rect x="10" y="10" width="130" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="75" y="35" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">Load Video</text>
+  <rect x="200" y="10" width="160" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="280" y="35" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">VACE Source Prep</text>
+  <rect x="430" y="10" width="130" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="495" y="35" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">Mask Generator</text>
+  <rect x="430" y="120" width="160" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="510" y="145" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">Sampler / VACE Encode</text>
+  <rect x="280" y="240" width="160" height="40" rx="8" fill="#4a7ebb"/>
+  <text x="360" y="265" text-anchor="middle" font-size="13" font-family="sans-serif" font-weight="bold" fill="#fff">VACE Merge Back</text>
+  <!-- Load Video → Source Prep (source_clip) -->
+  <line x1="140" y1="30" x2="200" y2="30" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="170" y="24" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#888">source_clip</text>
+  <!-- Source Prep → Mask Gen (trimmed_clip) -->
+  <line x1="360" y1="30" x2="430" y2="30" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="395" y="24" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#888">trimmed_clip</text>
+  <!-- Source Prep → Mask Gen (mode) -->
+  <path d="M360,40 Q400,65 430,45" stroke="#666" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="405" y="58" text-anchor="middle" font-size="10" font-family="sans-serif" fill="#888">mode</text>
+  <!-- Mask Gen → Sampler (mask + control_frames) -->
+  <line x1="495" y1="50" x2="495" y2="120" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="520" y="85" font-size="10" font-family="sans-serif" fill="#888">mask</text>
+  <text x="520" y="97" font-size="10" font-family="sans-serif" fill="#888">control_frames</text>
+  <text x="520" y="109" font-size="10" font-family="sans-serif" fill="#888">target_frames</text>
+  <!-- Source Prep → Merge Back (vace_pipe) -->
+  <path d="M280,50 L280,260 L280,260" stroke="#666" stroke-width="2" stroke-dasharray="6,3" marker-end="url(#arrow)"/>
+  <text x="264" y="155" font-size="10" font-family="sans-serif" fill="#888" transform="rotate(-90,264,155)">vace_pipe</text>
+  <!-- Load Video → Merge Back (source_clip) -->
+  <path d="M75,50 L75,260 L280,260" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="59" y="155" font-size="10" font-family="sans-serif" fill="#888" transform="rotate(-90,59,155)">source_clip</text>
+  <!-- Sampler → Merge Back (vace_output) -->
+  <path d="M510,160 L510,200 L440,260" stroke="#666" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="500" y="215" font-size="10" font-family="sans-serif" fill="#888">vace_output</text>
+</svg>

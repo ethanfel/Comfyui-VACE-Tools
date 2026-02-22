@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 90" style="max-width:600px">
+  <text y="12" font-size="11" font-family="sans-serif" fill="#888">mask</text>
+  <rect x="0" y="18" width="200" height="28" rx="4" fill="#222"/>
+  <text x="100" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × before</text>
+  <rect x="200" y="18" width="200" height="28" rx="4" fill="#fff" stroke="#ccc"/>
+  <text x="300" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#333">WHITE × replace</text>
+  <rect x="400" y="18" width="200" height="28" rx="4" fill="#222"/>
+  <text x="500" y="36" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">BLACK × after</text>
+  <text y="62" font-size="11" font-family="sans-serif" fill="#888">control_frames</text>
+  <rect x="0" y="68" width="200" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="100" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">before frames</text>
+  <rect x="200" y="68" width="200" height="28" rx="4" fill="#999"/>
+  <text x="300" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">GREY × replace</text>
+  <rect x="400" y="68" width="200" height="28" rx="4" fill="#4a9ebb"/>
+  <text x="500" y="86" text-anchor="middle" font-size="12" font-family="sans-serif" fill="#fff">after frames</text>
+</svg>
