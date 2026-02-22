@@ -260,6 +260,39 @@ Merge:     result = original[0:121] + vace[0:81] + original[153:274]
 
 ---
 
+## Node: VACE Mode Select
+
+Utility node that selects a VACE mode by integer index. Useful when driving the mode choice from another node's integer output (e.g. a selector or counter) instead of a dropdown.
+
+### Inputs
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `index` | INT | `0` | Mode index (0–9). Clamped to valid range. |
+
+### Index Mapping
+
+| Index | Mode |
+|---|---|
+| 0 | End Extend |
+| 1 | Pre Extend |
+| 2 | Middle Extend |
+| 3 | Edge Extend |
+| 4 | Join Extend |
+| 5 | Bidirectional Extend |
+| 6 | Frame Interpolation |
+| 7 | Replace/Inpaint |
+| 8 | Video Inpaint |
+| 9 | Keyframe |
+
+### Outputs
+
+| Output | Type | Description |
+|---|---|---|
+| `mode` | COMBO | Selected mode string — wire to VACE Source Prep or VACE Mask Generator's `mode` input. |
+
+---
+
 ## Node: WanVideo Save Merged Model
 
 Saves a WanVideo diffusion model (with merged LoRAs) as a `.safetensors` file. Found under the **WanVideoWrapper** category.
