@@ -17,7 +17,7 @@ VACE_MODES = [
 
 def _snap_4n1(n):
     """Round up to nearest 4n+1 value (1, 5, 9, 13, ..., 77, 81, ...)."""
-    return ((n + 2) // 4) * 4 + 1
+    return int(((n + 2) // 4) * 4 + 1)
 
 
 def _create_solid_batch(count, height, width, color_value, device="cpu"):
