@@ -61,14 +61,14 @@ Parameter usage by mode:
   inpaint_mask       : Video Inpaint only
   keyframe_positions : Keyframe only (optional)
 
-Note: source_clip must not exceed target_frames for modes that use it.
+Note: trimmed_clip must not exceed target_frames for modes that use it.
 If your source is longer, use VACE Source Prep upstream to trim it first."""
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "source_clip": ("IMAGE", {"description": "Source video frames (B,H,W,C tensor)."}),
+                "trimmed_clip": ("IMAGE", {"description": "Video frames to process — connect from VACE Source Prep's trimmed_clip output or any IMAGE source."}),
                 "mode": (
                     VACE_MODES,
                     {
@@ -116,23 +116,23 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                     {
                         "default": "",
                         "description": "Comma-separated frame indices for Keyframe mode (e.g. '0,20,50,80'). "
-                                       "One position per source_clip frame, sorted ascending, within [0, target_frames-1]. "
+                                       "One position per trimmed_clip frame, sorted ascending, within [0, target_frames-1]. "
                                        "Leave empty or disconnected for even auto-spread.",
                     },
                 ),
             },
         }
 
-    def generate(self, source_clip, mode, target_frames, split_index, edge_frames, inpaint_mask=None, keyframe_positions=None):
-        B, H, W, C = source_clip.shape
-        dev = source_clip.device
+    def generate(self, trimmed_clip, mode, target_frames, split_index, edge_frames, inpaint_mask=None, keyframe_positions=None):
+        B, H, W, C = trimmed_clip.shape
+        dev = trimmed_clip.device
         target_frames = _snap_4n1(target_frames)
 
         modes_using_target = {"End Extend", "Pre Extend", "Middle Extend", "Edge Extend",
                               "Join Extend", "Bidirectional Extend", "Keyframe"}
         if mode in modes_using_target and B > target_frames:
             raise ValueError(
-                f"{mode}: source_clip has {B} frames but target_frames is {target_frames}. "
+                f"{mode}: trimmed_clip has {B} frames but target_frames is {target_frames}. "
                 "Use VACE Source Prep to trim long clips."
             )
 
@@ -146,11 +146,11 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
         if mode == "End Extend":
             frames_to_generate = target_frames - B
             mask = torch.cat([solid(B, BLACK), solid(frames_to_generate, WHITE)], dim=0)
-            control_frames = torch.cat([source_clip, solid(frames_to_generate, GREY)], dim=0)
+            control_frames = torch.cat([trimmed_clip, solid(frames_to_generate, GREY)], dim=0)
             return (control_frames, mask, target_frames)
 
         elif mode == "Pre Extend":
-            image_a = source_clip[:split_index]
+            image_a = trimmed_clip[:split_index]
             a_count = image_a.shape[0]
             frames_to_generate = target_frames - a_count
             mask = torch.cat([solid(frames_to_generate, WHITE), solid(a_count, BLACK)], dim=0)
@@ -163,10 +163,10 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             if split_index >= B:
                 raise ValueError(
                     f"Middle Extend: split_index ({split_index}) is out of range — "
-                    f"source_clip only has {B} frames. Use 0 for auto-middle."
+                    f"trimmed_clip only has {B} frames. Use 0 for auto-middle."
                 )
-            image_a = source_clip[:split_index]
-            image_b = source_clip[split_index:]
+            image_a = trimmed_clip[:split_index]
+            image_b = trimmed_clip[split_index:]
             a_count = image_a.shape[0]
             b_count = image_b.shape[0]
             frames_to_generate = target_frames - (a_count + b_count)
@@ -175,8 +175,8 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             return (control_frames, mask, target_frames)
 
         elif mode == "Edge Extend":
-            start_seg = source_clip[:edge_frames]
-            end_seg = source_clip[-edge_frames:]
+            start_seg = trimmed_clip[:edge_frames]
+            end_seg = trimmed_clip[-edge_frames:]
             start_count = start_seg.shape[0]
             end_count = end_seg.shape[0]
             frames_to_generate = target_frames - (start_count + end_count)
@@ -186,8 +186,8 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
 
         elif mode == "Join Extend":
             half = B // 2
-            first_half = source_clip[:half]
-            second_half = source_clip[half:]
+            first_half = trimmed_clip[:half]
+            second_half = trimmed_clip[half:]
             part_2 = first_half[-edge_frames:]
             part_3 = second_half[:edge_frames]
             p2_count = part_2.shape[0]
@@ -205,7 +205,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                 pre_count = frames_to_generate // 2
             post_count = frames_to_generate - pre_count
             mask = torch.cat([solid(pre_count, WHITE), solid(B, BLACK), solid(post_count, WHITE)], dim=0)
-            control_frames = torch.cat([solid(pre_count, GREY), source_clip, solid(post_count, GREY)], dim=0)
+            control_frames = torch.cat([solid(pre_count, GREY), trimmed_clip, solid(post_count, GREY)], dim=0)
             return (control_frames, mask, target_frames)
 
         elif mode == "Frame Interpolation":
@@ -215,7 +215,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             ctrl_parts = []
             for i in range(B):
                 mask_parts.append(solid(1, BLACK))
-                ctrl_parts.append(source_clip[i:i+1])
+                ctrl_parts.append(trimmed_clip[i:i+1])
                 if i < B - 1:
                     mask_parts.append(solid(step, WHITE))
                     ctrl_parts.append(solid(step, GREY))
@@ -227,14 +227,14 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             if split_index >= B:
                 raise ValueError(
                     f"Replace/Inpaint: split_index ({split_index}) is out of range — "
-                    f"source_clip only has {B} frames."
+                    f"trimmed_clip only has {B} frames."
                 )
             start = max(0, min(split_index, B))
             length = max(0, min(edge_frames, B - start))
             end = start + length
             frames_to_generate = length
-            before = source_clip[:start]
-            after = source_clip[end:]
+            before = trimmed_clip[:start]
+            after = trimmed_clip[end:]
             mask = torch.cat([solid(before.shape[0], BLACK), solid(length, WHITE), solid(after.shape[0], BLACK)], dim=0)
             control_frames = torch.cat([before, solid(length, GREY), after], dim=0)
             return (control_frames, mask, _snap_4n1(B))
@@ -246,26 +246,26 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             if m.shape[1] != H or m.shape[2] != W:
                 raise ValueError(
                     f"Video Inpaint: inpaint_mask spatial size {m.shape[1]}x{m.shape[2]} "
-                    f"doesn't match source_clip {H}x{W}."
+                    f"doesn't match trimmed_clip {H}x{W}."
                 )
             m = m.clamp(0.0, 1.0)
             if m.shape[0] == 1 and B > 1:
                 m = m.expand(B, -1, -1)                    # broadcast single mask to all frames
             elif m.shape[0] != B:
                 raise ValueError(
-                    f"Video Inpaint: inpaint_mask has {m.shape[0]} frames but source_clip has {B}. "
+                    f"Video Inpaint: inpaint_mask has {m.shape[0]} frames but trimmed_clip has {B}. "
                     "Must match or be 1 frame."
                 )
             m3 = m.unsqueeze(-1).expand(-1, -1, -1, 3).contiguous()  # (B,H,W) -> (B,H,W,3)
             mask = m3
-            grey = torch.full_like(source_clip, GREY)
-            control_frames = source_clip * (1.0 - m3) + grey * m3
+            grey = torch.full_like(trimmed_clip, GREY)
+            control_frames = trimmed_clip * (1.0 - m3) + grey * m3
             return (control_frames, mask, _snap_4n1(B))
 
         elif mode == "Keyframe":
             if B > target_frames:
                 raise ValueError(
-                    f"Keyframe: source_clip has {B} frames but target_frames is only {target_frames}. "
+                    f"Keyframe: trimmed_clip has {B} frames but target_frames is only {target_frames}. "
                     "Need at least as many target frames as keyframes."
                 )
             if keyframe_positions and keyframe_positions.strip():
@@ -296,7 +296,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                     mask_parts.append(solid(gap, WHITE))
                     ctrl_parts.append(solid(gap, GREY))
                 mask_parts.append(solid(1, BLACK))
-                ctrl_parts.append(source_clip[i:i+1])
+                ctrl_parts.append(trimmed_clip[i:i+1])
                 prev_end = pos + 1
 
             trailing = target_frames - prev_end
@@ -320,7 +320,7 @@ class VACESourcePrep:
         "inpaint_mask", "keyframe_positions", "vace_pipe",
     )
     OUTPUT_TOOLTIPS = (
-        "Trimmed source frames — wire to VACE Mask Generator's source_clip.",
+        "Trimmed source frames — wire to VACE Mask Generator's trimmed_clip input.",
         "Selected mode — wire to VACE Mask Generator's mode.",
         "Adjusted split_index for the trimmed clip — wire to VACE Mask Generator.",
         "Adjusted edge_frames — wire to VACE Mask Generator.",

@@ -35,7 +35,7 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 
 | Output | Type | Description |
 |---|---|---|
-| `trimmed_clip` | IMAGE | Trimmed frames — wire to mask generator's source_clip. |
+| `trimmed_clip` | IMAGE | Trimmed frames — wire to mask generator's trimmed_clip. |
 | `mode` | ENUM | Selected mode — wire to mask generator's mode. |
 | `split_index` | INT | Adjusted for the trimmed clip — wire to mask generator. |
 | `edge_frames` | INT | Adjusted/passed through — wire to mask generator. |
@@ -64,13 +64,13 @@ Irrelevant widgets are automatically hidden based on the selected mode.
 
 Builds mask and control_frames sequences for all VACE generation modes. Works standalone for short clips, or downstream of VACE Source Prep for long clips.
 
-**Note:** For modes that use `target_frames` (End, Pre, Middle, Edge, Join, Bidirectional, Keyframe), `source_clip` must not have more frames than `target_frames`. If your source is longer, use VACE Source Prep upstream to trim it first.
+**Note:** For modes that use `target_frames` (End, Pre, Middle, Edge, Join, Bidirectional, Keyframe), `trimmed_clip` must not have more frames than `target_frames`. If your source is longer, use VACE Source Prep upstream to trim it first.
 
 ### Inputs
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `source_clip` | IMAGE | — | Source video frames (B, H, W, C tensor). Must not exceed target_frames for modes that use it. |
+| `trimmed_clip` | IMAGE | — | Video frames to process — connect from VACE Source Prep's trimmed_clip output or any IMAGE source. Must not exceed target_frames for modes that use it. |
 | `mode` | ENUM | `End Extend` | Generation mode (see below). 10 modes available. |
 | `target_frames` | INT | `81` | Total output frame count for mask and control_frames (1–10000). Used by Keyframe to set output length. Unused by Frame Interpolation, Replace/Inpaint, and Video Inpaint. |
 | `split_index` | INT | `0` | Where to split the source. Middle: split frame index (0 = auto-middle). Bidirectional: frames before clip (0 = even split). Frame Interpolation: new frames per gap. Replace/Inpaint: start index of replace region. Unused by End/Pre/Edge/Join/Video Inpaint/Keyframe. Raises an error if out of range. |
