@@ -3,6 +3,7 @@ import json
 import logging
 import torch
 import folder_paths
+import comfy.model_management
 from safetensors.torch import save_file
 from comfy.utils import ProgressBar
 
@@ -76,6 +77,12 @@ class WanVideoSaveMergedModel:
         # Extract state dict from the diffusion model (keys are already bare,
         # e.g. "blocks.0.self_attn.k.weight" — matching original checkpoint format)
         diffusion_model = model.model.diffusion_model
+
+        # Force ComfyUI to load model weights into real memory.
+        # Without this, weights stay on meta device (shape-only, no data).
+        log.info("Loading model weights into memory for saving...")
+        comfy.model_management.load_models_gpu([model], force_full_load=True)
+
         state_dict = diffusion_model.state_dict()
 
         target_dtype = dtype_map.get(save_dtype)
