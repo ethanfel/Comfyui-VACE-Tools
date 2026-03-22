@@ -22,6 +22,14 @@ class SaveLatentAbsolute:
     CATEGORY = "latent"
     OUTPUT_NODE = True
 
+    @staticmethod
+    def _is_json_serializable(value):
+        try:
+            json.dumps(value)
+            return True
+        except (TypeError, ValueError):
+            return False
+
     def save(self, samples, path, overwrite=False):
         path = os.path.expanduser(path)
         if not path.endswith(".latent"):
@@ -42,7 +50,7 @@ class SaveLatentAbsolute:
             if isinstance(value, torch.Tensor):
                 devices[key] = str(value.device)
                 tensors[key] = value.contiguous()
-            else:
+            elif self._is_json_serializable(value):
                 non_tensors[key] = value
 
         metadata = {"devices": json.dumps(devices)}
