@@ -77,10 +77,16 @@ class LoadLatentAbsolute:
     def load(self, path):
         path = os.path.expanduser(path)
 
-        samples = safetensors.torch.load_file(path, device="cpu")
+        raw = safetensors.torch.load_file(path, device="cpu")
 
         with safetensors.safe_open(path, framework="pt") as f:
             meta = f.metadata()
+
+        # ComfyUI's built-in save latent uses key "latent_tensor" → remap to "samples"
+        if "latent_tensor" in raw and "samples" not in raw:
+            raw["samples"] = raw.pop("latent_tensor")
+
+        samples = dict(raw)
 
         # Restore original devices
         if meta and "devices" in meta:
