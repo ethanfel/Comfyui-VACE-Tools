@@ -373,7 +373,7 @@ input_left / input_right (0 = use all available):
   Replace/Inpaint:     input_left/input_right = context frames around replace region
   Video Inpaint:       pass-through (no trimming)
   Keyframe:            pass-through (no trimming)
-  Upscale:             pass-through (no trimming — handle chunking at workflow level)"""
+  Upscale:             pass-through; source_clip_2 = reference image(s) spliced at keyframe_positions"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -433,7 +433,7 @@ input_left / input_right (0 = use all available):
                 "source_clip_2": (
                     "IMAGE",
                     {
-                        "description": "Second clip for Join Extend — join two separate clips instead of splitting one in half.",
+                        "description": "Join Extend: second clip to join. Upscale: reference image(s) to splice at keyframe_positions — one frame per anchored position, or one frame broadcast to all.",
                     },
                 ),
                 "inpaint_mask": (
@@ -591,8 +591,30 @@ input_left / input_right (0 = use all available):
             return (source_clip, mode, split_index, edge_frames, mask_ph(), kp_out, pipe)
 
         elif mode == "Upscale":
+            output = source_clip.clone()
+            if source_clip_2 is not None and keyframe_positions and keyframe_positions.strip():
+                try:
+                    positions = [int(x.strip()) for x in keyframe_positions.split(",")]
+                except ValueError:
+                    raise ValueError(
+                        f"Upscale: keyframe_positions must be comma-separated integers, got: '{keyframe_positions}'"
+                    )
+                ref = source_clip_2.to(dev)
+                n_ref = ref.shape[0]
+                n_pos = len(positions)
+                if n_ref != n_pos and n_ref != 1:
+                    raise ValueError(
+                        f"Upscale: source_clip_2 has {n_ref} frames but keyframe_positions has {n_pos} positions — "
+                        "must match, or provide 1 frame to use for all positions."
+                    )
+                for i, pos in enumerate(positions):
+                    if not (0 <= pos < B):
+                        raise ValueError(
+                            f"Upscale: keyframe_positions index {pos} is out of range — source_clip has {B} frames [0..{B-1}]."
+                        )
+                    output[pos] = ref[0] if n_ref == 1 else ref[i]
             pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
-            return (source_clip, mode, split_index, edge_frames, mask_ph(), kp_out, pipe)
+            return (output, mode, split_index, edge_frames, mask_ph(), kp_out, pipe)
 
         raise ValueError(f"Unknown mode: {mode}")
 
