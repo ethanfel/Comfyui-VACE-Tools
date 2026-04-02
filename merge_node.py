@@ -9,7 +9,7 @@ OPTICAL_FLOW_PRESETS = {
     'max':      {'levels': 7, 'winsize': 31, 'iterations': 10, 'poly_n': 7, 'poly_sigma': 1.5},
 }
 
-PASS_THROUGH_MODES = {"Edge Extend", "Frame Interpolation", "Keyframe", "Video Inpaint"}
+PASS_THROUGH_MODES = {"Edge Extend", "Frame Interpolation", "Keyframe", "Video Inpaint", "Upscale"}
 
 
 
@@ -84,7 +84,7 @@ class VACEMergeBack:
 Connect the original (untrimmed) clip, the VACE sampler output, and the vace_pipe from VACE Source Prep.
 The pipe carries mode, trim bounds, and context frame counts for automatic blending.
 
-Pass-through modes (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint):
+Pass-through modes (Edge Extend, Frame Interpolation, Keyframe, Video Inpaint, Upscale):
   Returns vace_output as-is — the VACE output IS the final result.
 
 Splice modes (End, Pre, Middle, Join, Bidirectional, Replace):

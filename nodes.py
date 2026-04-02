@@ -12,6 +12,7 @@ VACE_MODES = [
     "Replace/Inpaint",
     "Video Inpaint",
     "Keyframe",
+    "Upscale",
 ]
 
 
@@ -50,6 +51,7 @@ Modes:
   Replace/Inpaint     — regenerate a range of frames in-place
   Video Inpaint       — regenerate masked spatial regions (requires inpaint_mask)
   Keyframe            — place keyframe images at positions, generate between them
+  Upscale             — enhance already-upscaled frames; anchor start/end reference frames
 
 Mask colors: Black = keep original, White = generate new.
 Control frames: original pixels where kept, grey (#7f7f7f) where generating.
@@ -59,7 +61,7 @@ Parameter usage by mode:
   split_index        : End, Pre, Middle, Bidirectional, Frame Interpolation, Replace/Inpaint
   edge_frames        : Edge, Join, Replace/Inpaint
   inpaint_mask       : Video Inpaint only
-  keyframe_positions : Keyframe only (optional)
+  keyframe_positions : Keyframe — frame placement; Upscale — indices to anchor exactly (reuse same value)
 
 Note: trimmed_clip must not exceed target_frames for modes that use it.
 If your source is longer, use VACE Source Prep upstream to trim it first."""
@@ -73,7 +75,7 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                     VACE_MODES,
                     {
                         "default": "End Extend",
-                        "description": "End: generate after clip. Pre: generate before clip. Middle: generate at split point. Edge: generate between reversed edges (looping). Join: generate to heal two halves. Bidirectional: generate before AND after clip. Frame Interpolation: insert generated frames between each source pair. Replace/Inpaint: regenerate a range of frames in-place. Video Inpaint: regenerate masked spatial regions across all frames (requires inpaint_mask). Keyframe: place keyframe images at positions within target_frames, generate between them (optional keyframe_positions for manual placement).",
+                        "description": "End: generate after clip. Pre: generate before clip. Middle: generate at split point. Edge: generate between reversed edges (looping). Join: generate to heal two halves. Bidirectional: generate before AND after clip. Frame Interpolation: insert generated frames between each source pair. Replace/Inpaint: regenerate a range of frames in-place. Video Inpaint: regenerate masked spatial regions across all frames (requires inpaint_mask). Keyframe: place keyframe images at positions within target_frames, generate between them (optional keyframe_positions for manual placement). Upscale: enhance already-upscaled frames using real pixels as VACE reference; use keyframe_positions to anchor specific frames exactly.",
                     },
                 ),
                 "target_frames": (
@@ -115,9 +117,9 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
                     "STRING",
                     {
                         "default": "",
-                        "description": "Comma-separated frame indices for Keyframe mode (e.g. '0,20,50,80'). "
-                                       "One position per trimmed_clip frame, sorted ascending, within [0, target_frames-1]. "
-                                       "Leave empty or disconnected for even auto-spread.",
+                        "description": "Keyframe mode: comma-separated positions to place keyframe images (e.g. '0,20,50,80'). "
+                                       "One position per trimmed_clip frame, sorted ascending, within [0, target_frames-1]. Leave empty for even auto-spread. "
+                                       "Upscale mode: reuse the same value — these positions will be anchored exactly (black mask).",
                     },
                 ),
             },
@@ -308,6 +310,32 @@ If your source is longer, use VACE Source Prep upstream to trim it first."""
             control_frames = torch.cat(ctrl_parts, dim=0)
             return (control_frames, mask, target_frames)
 
+        elif mode == "Upscale":
+            # Reuse keyframe_positions to identify anchor frames (kept exactly, black mask).
+            # Wire the same keyframe_positions value from your original generation — no rewiring needed.
+            if keyframe_positions and keyframe_positions.strip():
+                try:
+                    anchor_set = {int(x.strip()) for x in keyframe_positions.split(",")}
+                except ValueError:
+                    raise ValueError(
+                        f"Upscale: keyframe_positions must be comma-separated integers (e.g. '40' or '0,80'), got: '{keyframe_positions}'"
+                    )
+                out_of_range = [i for i in anchor_set if not (0 <= i < B)]
+                if out_of_range:
+                    raise ValueError(
+                        f"Upscale: keyframe_positions {out_of_range} are out of range — trimmed_clip has {B} frames [0..{B-1}]."
+                    )
+            else:
+                anchor_set = set()
+            # Build per-frame mask: anchored frames → BLACK (keep exactly), rest → WHITE (enhance)
+            black_frame = solid(1, BLACK)[0]
+            white_frame = solid(1, WHITE)[0]
+            mask = torch.stack([black_frame if i in anchor_set else white_frame for i in range(B)])
+            # Unlike all other modes, control_frames uses real pixels (not grey) where mask=WHITE.
+            # This gives VACE a concrete upscaled reference to refine from, rather than generating blind.
+            control_frames = trimmed_clip
+            return (control_frames, mask, _snap_4n1(B))
+
         raise ValueError(f"Unknown mode: {mode}")
 
 
@@ -344,7 +372,8 @@ input_left / input_right (0 = use all available):
   Frame Interpolation: pass-through (no trimming)
   Replace/Inpaint:     input_left/input_right = context frames around replace region
   Video Inpaint:       pass-through (no trimming)
-  Keyframe:            pass-through (no trimming)"""
+  Keyframe:            pass-through (no trimming)
+  Upscale:             pass-through (no trimming — handle chunking at workflow level)"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -558,6 +587,10 @@ input_left / input_right (0 = use all available):
             return (source_clip, mode, split_index, edge_frames, out_mask, kp_out, pipe)
 
         elif mode == "Keyframe":
+            pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
+            return (source_clip, mode, split_index, edge_frames, mask_ph(), kp_out, pipe)
+
+        elif mode == "Upscale":
             pipe = {"mode": mode, "trim_start": 0, "trim_end": B, "left_ctx": 0, "right_ctx": 0}
             return (source_clip, mode, split_index, edge_frames, mask_ph(), kp_out, pipe)
 
