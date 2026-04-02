@@ -434,6 +434,7 @@ input_left / input_right (0 = use all available):
                     "IMAGE",
                     {
                         "description": "Join Extend: second clip to join. Upscale: reference image(s) to splice at keyframe_positions — one frame per anchored position, or one frame broadcast to all.",
+                        "tooltip": "Join Extend: second source clip to heal/join.\nUpscale: your reference image(s) at upscaled size — spliced into the clip at keyframe_positions before VACE processing.",
                     },
                 ),
                 "inpaint_mask": (
